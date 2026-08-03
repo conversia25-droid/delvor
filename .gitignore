@@ -1,0 +1,53 @@
+# =====================================================================
+# OSManager — .gitignore
+# =====================================================================
+
+# ----- Dependências e build -----
+node_modules
+dist
+dist-ssr
+.vite
+*.tsbuildinfo
+
+# ----- Logs -----
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ----- VARIÁVEIS DE AMBIENTE — NUNCA SUBIR -----
+# Bloqueia todos os arquivos .env exceto o exemplo público.
+.env
+.env.*
+!.env.example
+
+# ----- Supabase local (volumes/branches do Docker) -----
+supabase/.branches
+supabase/.temp
+supabase/seed_data.sql.bak
+**/seed_data.sql.bak
+
+# ----- Editor / SO -----
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.local
+
+# ----- Lovable (do projeto base) -----
+.lovable
+
+# ----- Misc -----
+*.zip
+*.pem
+*.key
+.DS_Store

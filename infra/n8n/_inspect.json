@@ -1,0 +1,2979 @@
+{
+  "name": "Delvor - Envio WhatsApp",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "enviosmidiacrmservices",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -32,
+        -976
+      ],
+      "id": "0f322707-ea00-4fc7-90d6-5690e95bd57d",
+      "name": "Webhook",
+      "webhookId": "468b76ee-ed4e-4d87-b7db-eadfc995d1d5"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e27c09fb-c2f1-46c3-a35a-59c1320929cb",
+              "name": "=instance_id",
+              "value": "={{ $json.instance_id }}",
+              "type": "string"
+            },
+            {
+              "id": "3ef017ae-14bf-4518-96bc-c67de0ecf518",
+              "name": "=number",
+              "value": "={{ $json.number }}",
+              "type": "string"
+            },
+            {
+              "id": "f83cae10-f234-4f69-989c-66bcf64d6208",
+              "name": "base64",
+              "value": "={{ $json.data }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1408,
+        -1408
+      ],
+      "id": "b2b99bfa-e318-44bd-955d-1890619e925f",
+      "name": "Edit Fields5"
+    },
+    {
+      "parameters": {
+        "operation": "binaryToPropery",
+        "binaryPropertyName": "file",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        -1408
+      ],
+      "id": "1a1d80c5-909b-47be-9dec-667b18c089eb",
+      "name": "Extract from File5"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://wggvhxtfeucntdunhocn.supabase.co/storage/v1/object/whatsapp-media/{{ $json.instance.instanceName }}/{{ $('Resolve company_id1').item.json.number }}/{{ $now }}.ogg",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "=apikey",
+              "value": "=sb_publishable_2cz58FxaHVzkO-lcOMbhqQ_lI0_QSkd"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer sb_publishable_2cz58FxaHVzkO-lcOMbhqQ_lI0_QSkd"
+            },
+            {
+              "name": "Content-Type",
+              "value": "=audio/ogg"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "file",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1600,
+        -1312
+      ],
+      "id": "3edc322b-e912-4224-8337-f28bcf2fd4d5",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const identity = $('Resolve instance_id1').first().json;\nconst upload = $input.first().json;\n\n// upload.Key já vem como: whatsapp-media/448697/553193044907/arquivo.ogg\nconst media_url = upload?.Key\n  ? `${$env.SUPABASE_URL}/storage/v1/object/public/${upload.Key}`\n  : null;\n\nreturn [\n  {\n    json: {\n      ...identity,\n      media_url\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        -1312
+      ],
+      "id": "37e1928d-54bf-4893-8f92-fd41846337f0",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "operation": "send-audio",
+        "instanceName": "={{ $json.instance_name }}",
+        "remoteJid": "={{ $('Code in JavaScript').item.json.number }}",
+        "media": "={{ $('Code in JavaScript').item.json.media_url }}",
+        "options_message": {
+          "delay": 2200
+        }
+      },
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        2128,
+        -1312
+      ],
+      "id": "106d6837-c994-4071-a295-018051cf0ea5",
+      "name": "Enviar audio",
+      "retryOnFail": true,
+      "credentials": {
+        "evolutionApi": {
+          "id": "kcgn2qVKU1R9vIji",
+          "name": "EvoVPS1"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "audio",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "6ab04b9d-9022-4610-85b7-6c9f45d7a64e"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Audio"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "a3008a26-0828-4a97-b77a-d3598bdfa1f8",
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "image",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Imagem"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "e33a463e-bb7b-4e51-9716-b46601cde463",
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "video",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Video"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "2b93a62e-53f5-4d21-819c-e18e6b54fc3c",
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "document",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "PDF"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "09ee0c5a-1195-488a-a97e-1b47324bd366",
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "text",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Texto"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c0f3dc61-a0ed-4dc6-af91-afa76bb63a7b",
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "reaction",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Reação"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "20350579-d29e-49e8-a5bb-4360fd372f89",
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "word",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Doc"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "3c40014f-3f6e-4d09-9ab5-6873f84f1f84",
+                    "leftValue": "={{ $json.file_type }}",
+                    "rightValue": "audio/webm; codecs=opus",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Iphone"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        1072,
+        -928
+      ],
+      "id": "46b71cb3-572d-4a32-88a5-5b593288af7e",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://wggvhxtfeucntdunhocn.supabase.co/storage/v1/object/whatsapp-media/{{ $json.instance_id }}/{{ $json.number }}/{{ $now }}.jpeg",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "=apikey",
+              "value": "=sb_publishable_2cz58FxaHVzkO-lcOMbhqQ_lI0_QSkd"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer sb_publishable_2cz58FxaHVzkO-lcOMbhqQ_lI0_QSkd"
+            },
+            {
+              "name": "Content-Type",
+              "value": "=image/jpeg"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "file",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1584,
+        -992
+      ],
+      "id": "fdd93d24-db9b-421f-8d40-a10397eab1d1",
+      "name": "HTTP Request6"
+    },
+    {
+      "parameters": {
+        "jsCode": "const identity = $('Resolve instance_id1').first().json;\nconst upload = $input.first().json;\n\n// upload.Key já vem como: whatsapp-media/448697/553193044907/arquivo.ogg\nconst media_url = upload?.Key\n  ? `${$env.SUPABASE_URL}/storage/v1/object/public/${upload.Key}`\n  : null;\n\nreturn [\n  {\n    json: {\n      ...identity,\n      media_url\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1808,
+        -992
+      ],
+      "id": "024848ad-0441-4dfa-80fd-8b22a5b2fdf9",
+      "name": "Code in JavaScript6"
+    },
+    {
+      "parameters": {
+        "tableId": "wpp_conversations",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "message_type",
+              "fieldValue": "={{ $('Code in JavaScript6').item.json.media_type }}"
+            },
+            {
+              "fieldId": "message",
+              "fieldValue": "={{ $('Code in JavaScript6').item.json.caption }}"
+            },
+            {
+              "fieldId": "media_url",
+              "fieldValue": "={{ $('Code in JavaScript6').item.json.media_url }}"
+            },
+            {
+              "fieldId": "raw_payload",
+              "fieldValue": "={{ $('Code in JavaScript6').item.json.sent_at }}"
+            },
+            {
+              "fieldId": "instance_id",
+              "fieldValue": "={{ $('Get many rows8').item.json.instance_name }}"
+            },
+            {
+              "fieldId": "remote_jid",
+              "fieldValue": "={{ $('Code in JavaScript6').item.json.number }}"
+            },
+            {
+              "fieldId": "from_me",
+              "fieldValue": "=true"
+            },
+            {
+              "fieldId": "company_id",
+              "fieldValue": "={{ $('Get many rows8').item.json.company_id }}"
+            },
+            {
+              "fieldId": "sent_by_user_id",
+              "fieldValue": "={{ $('Code in JavaScript6').item.json.sent_by_user_id }}"
+            },
+            {
+              "fieldId": "client_media_id",
+              "fieldValue": "={{ $('HTTP Request6').item.json.Id }}"
+            },
+            {
+              "fieldId": "message_id",
+              "fieldValue": "={{ $json.data.key.id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2416,
+        -992
+      ],
+      "id": "1fba9a39-3f8c-4371-ac50-ca958500524a",
+      "name": "Create a row",
+      "credentials": {
+        "supabaseApi": {
+          "id": "wjHkMOfQnBoTeESX",
+          "name": "SupabaseCRMServices"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "operation": "send-image",
+        "instanceName": "={{ $json.instance_name }}",
+        "remoteJid": "={{ $('Code in JavaScript6').item.json.number }}",
+        "media": "={{ $('Code in JavaScript6').item.json.media_url }}",
+        "caption": "={{ $('Code in JavaScript6').item.json.caption }}",
+        "options_message": {
+          "delay": 2200,
+          "quoted": {
+            "messageQuoted": {
+              "messageId": "={{ $('Code in JavaScript6').item.json.instance_name }}"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        2224,
+        -992
+      ],
+      "id": "33c30375-2359-4dfe-875d-2ba6e30f6600",
+      "name": "Enviar imagem",
+      "credentials": {
+        "evolutionApi": {
+          "id": "kcgn2qVKU1R9vIji",
+          "name": "EvoVPS1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://wggvhxtfeucntdunhocn.supabase.co/storage/v1/object/whatsapp-media/{{ $json.instance_id }}/{{ $json.number }}/{{ $now }}.mp4",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "=apikey",
+              "value": "=sb_publishable_2cz58FxaHVzkO-lcOMbhqQ_lI0_QSkd"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer sb_publishable_2cz58FxaHVzkO-lcOMbhqQ_lI0_QSkd"
+            },
+            {
+              "name": "Content-Type",
+              "value": "=video/mp4"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "file",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1584,
+        -832
+      ],
+      "id": "0fd88677-a483-4e1f-b5cc-2abde4a54046",
+      "name": "HTTP Request8"
+    },
+    {
+      "parameters": {
+        "jsCode": "const identity = $('Resolve instance_id1').first().json;\nconst upload = $input.first().json;\n\n// upload.Key já vem como: whatsapp-media/448697/553193044907/arquivo.ogg\nconst media_url = upload?.Key\n  ? `${$env.SUPABASE_URL}/storage/v1/object/public/${upload.Key}`\n  : null;\n\nreturn [\n  {\n    json: {\n      ...identity,\n      media_url\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        -832
+      ],
+      "id": "7fb676a6-2666-4bdb-9e0a-d26ddb2a2cea",
+      "name": "Code in JavaScript7"
+    },
+    {
+      "parameters": {
+        "tableId": "wpp_conversations",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "message_type",
+              "fieldValue": "={{ $('Code in JavaScript7').item.json.media_type }}"
+            },
+            {
+              "fieldId": "message",
+              "fieldValue": "={{ $('Code in JavaScript7').item.json.caption }}"
+            },
+            {
+              "fieldId": "media_url",
+              "fieldValue": "={{ $('Code in JavaScript7').item.json.media_url }}"
+            },
+            {
+              "fieldId": "raw_payload",
+              "fieldValue": "={{ $('Code in JavaScript7').item.json.sent_at }}"
+            },
+            {
+              "fieldId": "instance_id",
+              "fieldValue": "={{ $('Code in JavaScript7').item.json.instance_name }}"
+            },
+            {
+              "fieldId": "remote_jid",
+              "fieldValue": "={{ $('Code in JavaScript7').item.json.number }}"
+            },
+            {
+              "fieldId": "from_me",
+              "fieldValue": "=true"
+            },
+            {
+              "fieldId": "company_id",
+              "fieldValue": "={{ $('Get many rows9').item.json.company_id }}"
+            },
+            {
+              "fieldId": "sent_by_user_id",
+              "fieldValue": "={{ $('Code in JavaScript7').item.json.sent_by_user_id }}"
+            },
+            {
+              "fieldId": "client_media_id",
+              "fieldValue": "={{ $('HTTP Request8').item.json.Id }}"
+            },
+            {
+              "fieldId": "message_id",
+              "fieldValue": "={{ $json.data.key.id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2624,
+        -832
+      ],
+      "id": "bef312bf-326c-42b6-87f0-8a2c10c713b9",
+      "name": "Create a row6",
+      "credentials": {
+        "supabaseApi": {
+          "id": "wjHkMOfQnBoTeESX",
+          "name": "SupabaseCRMServices"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://wggvhxtfeucntdunhocn.supabase.co/storage/v1/object/whatsapp-media/{{ $json.instance.instanceName }}/{{ $json.number }}/{{ $now }}.pdf",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "=apikey",
+              "value": "=sb_publishable_2cz58FxaHVzkO-lcOMbhqQ_lI0_QSkd"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer sb_publishable_2cz58FxaHVzkO-lcOMbhqQ_lI0_QSkd"
+            },
+            {
+              "name": "Content-Type",
+              "value": "=application/pdf"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "file",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1584,
+        -672
+      ],
+      "id": "040f26ce-d87b-45f0-8750-4d51c1066932",
+      "name": "HTTP Request9",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const identity = $('Resolve instance_id1').first().json;\nconst upload = $input.first().json;\n\n// upload.Key já vem como: whatsapp-media/448697/553193044907/arquivo.ogg\nconst media_url = upload?.Key\n  ? `${$env.SUPABASE_URL}/storage/v1/object/public/${upload.Key}`\n  : null;\n\nreturn [\n  {\n    json: {\n      ...identity,\n      media_url\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2032,
+        -688
+      ],
+      "id": "8063dc11-8818-496a-b1c7-d013f6bcb801",
+      "name": "Code in JavaScript8"
+    },
+    {
+      "parameters": {
+        "tableId": "wpp_conversations",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "message_type",
+              "fieldValue": "={{ $('Code in JavaScript8').first().json.media_type }}"
+            },
+            {
+              "fieldId": "message",
+              "fieldValue": "={{ $('Code in JavaScript8').first().json.caption || 'documento' }}"
+            },
+            {
+              "fieldId": "media_url",
+              "fieldValue": "={{ $('Code in JavaScript8').first().json.media_url }}"
+            },
+            {
+              "fieldId": "raw_payload",
+              "fieldValue": "={{ $('Code in JavaScript8').first().json }}"
+            },
+            {
+              "fieldId": "instance_id",
+              "fieldValue": "={{ $('Get many rows10').item.json.instance_name }}"
+            },
+            {
+              "fieldId": "remote_jid",
+              "fieldValue": "={{ $('Code in JavaScript8').first().json.number }}"
+            },
+            {
+              "fieldId": "from_me",
+              "fieldValue": "=true"
+            },
+            {
+              "fieldId": "company_id",
+              "fieldValue": "={{ $('Get many rows10').first().json.company_id }}"
+            },
+            {
+              "fieldId": "sent_by_user_id",
+              "fieldValue": "={{ $('Code in JavaScript8').first().json.sent_by_user_id }}"
+            },
+            {
+              "fieldId": "client_media_id",
+              "fieldValue": "={{ $('HTTP Request9').first().json.Id }}"
+            },
+            {
+              "fieldId": "message_id",
+              "fieldValue": "={{ $json.key.id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2624,
+        -688
+      ],
+      "id": "a1309485-b132-4c75-a1dc-c0cbf50bd618",
+      "name": "Create a row7",
+      "credentials": {
+        "supabaseApi": {
+          "id": "wjHkMOfQnBoTeESX",
+          "name": "SupabaseCRMServices"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "operation": "send-document",
+        "instanceName": "={{ $json.instance_name }}",
+        "remoteJid": "={{ $('Code in JavaScript8').item.json.number }}",
+        "media": "={{ $('Code in JavaScript8').item.json.media_url }}",
+        "caption": "={{ $('Code in JavaScript8').item.json.caption }}",
+        "fileName": "={{ $('Webhook').item.json.body.file_name }}",
+        "options_message": {
+          "delay": 2200,
+          "quoted": {
+            "messageQuoted": {
+              "messageId": "={{ $('Webhook').item.json.body.quoted.key.id }}"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        2432,
+        -688
+      ],
+      "id": "5b2267aa-1cc1-4503-8c88-9ac2c70ba40a",
+      "name": "Enviar documento",
+      "credentials": {
+        "evolutionApi": {
+          "id": "kcgn2qVKU1R9vIji",
+          "name": "EvoVPS1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "operation": "send-video",
+        "instanceName": "={{ $('Code in JavaScript7').item.json.instance_id }}{{ $('Code in JavaScript7').item.json.instance_name }}",
+        "remoteJid": "={{ $('Code in JavaScript7').item.json.number }}",
+        "media": "={{ $('Code in JavaScript7').item.json.media_url }}",
+        "caption": "={{ $('Webhook').item.json.body.caption }}",
+        "options_message": {
+          "delay": 2200,
+          "quoted": {
+            "messageQuoted": {
+              "messageId": "={{ $('Webhook').item.json.body.quoted.key.id }}"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        2432,
+        -832
+      ],
+      "id": "b6da1672-aa95-49d4-9ed8-99b7d2de2d54",
+      "name": "Enviar video",
+      "credentials": {
+        "evolutionApi": {
+          "id": "kcgn2qVKU1R9vIji",
+          "name": "EvoVPS1"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "wpp_instances",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "instance_name",
+              "condition": "eq",
+              "keyValue": "={{ $json.instance_name }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1968,
+        -1312
+      ],
+      "id": "6db00967-cd8c-4d78-adbe-da6203bcc87b",
+      "name": "Get many rows",
+      "credentials": {
+        "supabaseApi": {
+          "id": "wjHkMOfQnBoTeESX",
+          "name": "SupabaseCRMServices"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "wpp_instances",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "instance_name",
+              "condition": "eq",
+              "keyValue": "={{ $json.instance.instanceName }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2016,
+        -992
+      ],
+      "id": "57061c01-34c6-4698-9471-5615af9b48ef",
+      "name": "Get many rows8",
+      "credentials": {
+        "supabaseApi": {
+          "id": "wjHkMOfQnBoTeESX",
+          "name": "SupabaseCRMServices"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "wpp_instances",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "instance_name",
+              "condition": "eq",
+              "keyValue": "={{ $json.instance_name }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2224,
+        -832
+      ],
+      "id": "c2f81d84-f435-4417-b696-2b0b4559119b",
+      "name": "Get many rows9",
+      "credentials": {
+        "supabaseApi": {
+          "id": "wjHkMOfQnBoTeESX",
+          "name": "SupabaseCRMServices"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "wpp_instances",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "instance_name",
+              "condition": "eq",
+              "keyValue": "={{ $json.instance_name }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2224,
+        -688
+      ],
+      "id": "ab4d5cfd-ae73-4ef0-b461-b4ab36c3deb6",
+      "name": "Get many rows10",
+      "credentials": {
+        "supabaseApi": {
+          "id": "wjHkMOfQnBoTeESX",
+          "name": "SupabaseCRMServices"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "wpp_conversations",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "client_media_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Update a row18').item.json.client_media_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "message_id",
+              "fieldValue": "={{ $json.data.key.id }}"
+            },
+            {
+              "fieldId": "sent_by_user_id",
+              "fieldValue": "={{ $json.sent_by_user_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2752,
+        -1328
+      ],
+      "id": "61dcb60e-0e76-42c5-8aa9-e4a90b8ff48c",
+      "name": "Update a row14",
+      "credentials": {
+        "supabaseApi": {
+          "id": "sSuHaYjwFjkoWxlS",
+          "name": "supabaselocal"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "wpp_conversations",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "client_media_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Create a row').item.json.client_media_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "message_id",
+              "fieldValue": "={{ $json.data.key.id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2640,
+        -992
+      ],
+      "id": "c9042ee1-eb6a-4ae3-bbf6-93b5dd42295e",
+      "name": "Update a row15",
+      "credentials": {
+        "supabaseApi": {
+          "id": "sSuHaYjwFjkoWxlS",
+          "name": "supabaselocal"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "wpp_conversations",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "client_media_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Create a row6').item.json.client_media_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "message_id",
+              "fieldValue": "={{ $json.data.key.id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2848,
+        -832
+      ],
+      "id": "29bfaf72-cdd4-4cd0-ac33-406e51326c07",
+      "name": "Update a row16",
+      "credentials": {
+        "supabaseApi": {
+          "id": "sSuHaYjwFjkoWxlS",
+          "name": "supabaselocal"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "wpp_conversations",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "client_media_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Create a row7').item.json.client_media_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "message_id",
+              "fieldValue": "={{ $json.key.id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2848,
+        -672
+      ],
+      "id": "eee23bae-87c9-46f7-accc-b86fee7a4d75",
+      "name": "Update a row17",
+      "credentials": {
+        "supabaseApi": {
+          "id": "sSuHaYjwFjkoWxlS",
+          "name": "supabaselocal"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "wpp_conversations",
+        "filters": {
+          "conditions": [
+            {}
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "message_type",
+              "fieldValue": "audio | image | document | video"
+            },
+            {
+              "fieldId": "message",
+              "fieldValue": "={{ $('Code in JavaScript').item.json.media_type }}"
+            },
+            {
+              "fieldId": "media_url",
+              "fieldValue": "={{ $('Code in JavaScript').item.json.media_url }}"
+            },
+            {
+              "fieldId": "raw_payload",
+              "fieldValue": "={{ $now }}"
+            },
+            {
+              "fieldId": "instance_id",
+              "fieldValue": "={{ $('Code in JavaScript').item.json.instance_id }}"
+            },
+            {
+              "fieldId": "remote_jid",
+              "fieldValue": "={{ $('Code in JavaScript').item.json.number }}"
+            },
+            {
+              "fieldId": "from_me",
+              "fieldValue": "=true"
+            },
+            {
+              "fieldId": "company_id",
+              "fieldValue": "={{ $json.company_id }}"
+            },
+            {
+              "fieldId": "client_media_id",
+              "fieldValue": "={{ $('HTTP Request').item.json.Id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2560,
+        -1520
+      ],
+      "id": "35e501a7-6fb4-4644-b4ec-566058ce9d28",
+      "name": "Update a row18",
+      "credentials": {
+        "supabaseApi": {
+          "id": "sSuHaYjwFjkoWxlS",
+          "name": "supabaselocal"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://wggvhxtfeucntdunhocn.supabase.co/rest/v1/wpp_conversations?select=instance_id,company_id,created_at&remote_jid=eq.{{ $json.number }}&order=created_at.desc&limit=1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "=apikey",
+              "value": "=sb_publishable_2cz58FxaHVzkO-lcOMbhqQ_lI0_QSkd"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer sb_publishable_2cz58FxaHVzkO-lcOMbhqQ_lI0_QSkd"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        352,
+        -976
+      ],
+      "id": "c5a8ab6d-30f2-4f36-845f-1c5774656a08",
+      "name": "Lookup last conversation1",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Resolve instance_id com fallback seguro (aceita Webhook OU $input, e não quebra quando um node não executou)\nconst safeFirst = (nodeName) => {\n  try {\n    const arr = $items(nodeName);\n    return arr?.[0]?.json ?? null;\n  } catch (e) {\n    return null;\n  }\n};\n\n// 1) Fonte primária de entrada: $input (funciona vindo de IF/HTTP Request/etc)\nconst inputJson = $input.first()?.json ?? {};\n\n// 2) Se existir o node \"Resolve company_id1\", usamos como complemento (fluxo do webhook)\nconst fromResolveCompany = safeFirst('Resolve company_id1') ?? {};\n\n// 3) Body final: merge (input tem prioridade, mas mantém campos do resolveCompany se existirem)\nconst body = { ...fromResolveCompany, ...inputJson };\n\n// Helpers para respostas de HTTP Request/Supabase REST (normalmente retornam ARRAY no .json)\nconst firstRow = (maybeArr) => (Array.isArray(maybeArr) ? (maybeArr[0] ?? null) : null);\n\n// last conversation (HTTP Request que retorna array)\nconst lastConvArr = safeFirst('Lookup last conversation1');\nconst lastConvRow = firstRow(lastConvArr);\n\n// phone/current/defaults (todos via HTTP Request REST, retornam array também)\nconst phoneRow   = firstRow(safeFirst('Lookup phone by last instance1'));\nconst currentRow = firstRow(safeFirst('Lookup current instance by phone1'));\nconst defRow     = firstRow(safeFirst('Lookup default instance1'));\nconst defAnyRow  = firstRow(safeFirst('Lookup default ANY1'));\n\n// evolution state (node retorna objeto { instance: { state } } )\nconst evoState = safeFirst('Evolution check current1')?.instance?.state ?? null;\n\n// company_id com fallback\nconst company_id =\n  body.company_id ??\n  lastConvRow?.company_id ??\n  defRow?.company_id ??\n  defAnyRow?.company_id ??\n  null;\n\nlet resolved = null;\nlet strategy = null;\n\n// 1) Se a instância atual está OPEN, mantém ela\nif (currentRow?.instance_name && evoState === 'open') {\n  resolved = currentRow.instance_name;\n  strategy = 'current_instance(open)';\n}\n// 2) Se não está open, usa instância padrão (preferindo da empresa; fallback ANY)\nelse if (defRow?.instance_name) {\n  resolved = defRow.instance_name;\n  strategy = 'default_instance(company)';\n}\nelse if (defAnyRow?.instance_name) {\n  resolved = defAnyRow.instance_name;\n  strategy = 'default_instance(any)';\n}\n// 3) Fallbacks (quando não tem default configurada)\nelse if (currentRow?.instance_name) {\n  resolved = currentRow.instance_name;\n  strategy = 'current_instance(any)';\n}\nelse if (lastConvRow?.instance_id) {\n  resolved = lastConvRow.instance_id;\n  strategy = 'last_conversation(any)';\n}\n// 4) Fallback final: body.instance_id OU body.instance_name\nelse if (body.instance_id || body.instance_name) {\n  resolved = body.instance_id ?? body.instance_name;\n  strategy = 'fallback(body.instance_id|instance_name)';\n}\n\n\n// Binary: pega do Webhook se existir, senão do $input (caso venha de outro ramo/trigger)\nlet bin = null;\ntry {\n  bin = $('Webhook').first()?.binary ?? null;\n} catch (e) {\n  bin = null;\n}\nif (!bin) {\n  bin = $input.first()?.binary ?? null;\n}\n\nreturn [{\n  json: {\n    ...body,\n    company_id,\n    instance_id: resolved,\n    resolved_strategy: strategy,\n    resolved_phone_number: phoneRow?.phone_number ?? null,\n    resolved_current_instance_name: currentRow?.instance_name ?? null,\n    resolved_evolution_state: evoState,\n  },\n  binary: bin ?? undefined,\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        -512
+      ],
+      "id": "3360a1ed-8b20-4c34-9105-e33336d2622a",
+      "name": "Resolve instance_id1"
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "={{ $json.instance.instanceName }}",
+        "remoteJid": "={{ $json.number }}",
+        "messageText": "={{ $json.text }}",
+        "options_message": {
+          "delay": 2200,
+          "quoted": {
+            "messageQuoted": {
+              "messageId": "={{ $('Resolve company_id1').item.json.quoted.key.id }}"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        -464
+      ],
+      "id": "370900e7-18b6-48e9-a1b2-7d78307b6a06",
+      "name": "Enviar texto",
+      "retryOnFail": true,
+      "credentials": {
+        "evolutionApi": {
+          "id": "kcgn2qVKU1R9vIji",
+          "name": "EvoVPS1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "wpp_instances",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "instance_name",
+              "keyValue": "={{ $('Switch').item.json.instance_key }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1792,
+        -464
+      ],
+      "id": "5c41ae05-d5b8-4c8a-b2e9-6a95225a8560",
+      "name": "Get many rows Texto1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "wjHkMOfQnBoTeESX",
+          "name": "SupabaseCRMServices"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "wpp_conversations",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "message_type",
+              "fieldValue": "=conversation"
+            },
+            {
+              "fieldId": "message",
+              "fieldValue": "={{ $('Resolve instance_id1').item.json.text }}"
+            },
+            {
+              "fieldId": "raw_payload",
+              "fieldValue": "={{ $json }}"
+            },
+            {
+              "fieldId": "instance_id",
+              "fieldValue": "={{ $('Resolve instance_id1').item.json.instance_id }}"
+            },
+            {
+              "fieldId": "remote_jid",
+              "fieldValue": "={{ $('Resolve instance_id1').item.json.number }}"
+            },
+            {
+              "fieldId": "from_me",
+              "fieldValue": "=true"
+            },
+            {
+              "fieldId": "company_id",
+              "fieldValue": "={{ $('Get many rows Texto1').item.json.company_id }}"
+            },
+            {
+              "fieldId": "sent_by_user_id",
+              "fieldValue": "={{ $json.user_id }}"
+            },
+            {
+              "fieldId": "message_id",
+              "fieldValue": "={{ $('Enviar texto').item.json.data.key.id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3728,
+        -544
+      ],
+      "id": "454395de-7284-4e43-8d7b-7c40cc1ed7f0",
+      "name": "Create a row Texto1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "sSuHaYjwFjkoWxlS",
+          "name": "supabaselocal"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const webhook = $('Webhook').first();\nconst body = webhook?.json?.body ?? webhook?.json ?? {};\nconst bin = webhook?.binary;\n\n// --- TRATAMENTO DE TIPO E TEXTO ---\n// Se o texto ou o tipo vier com a flag do CRM, ajustamos para o padrão do banco\nif (body.text === \"img\" || body.type === \"img\") {\n  body.type = \"image\";\n  body.media_type = \"image\";\n  body.text = \"📷 Imagem enviada\";\n} else if (body.text === \"audio\" || body.type === \"audio\") {\n  body.type = \"audio\";\n  body.media_type = \"audio\";\n  body.text = \"🎵 Áudio enviado\";\n} else if (body.text === \"doc\" || body.text === \"document\" || body.type === \"doc\") {\n  body.type = \"document\";\n  body.media_type = \"document\";\n  body.text = \"📄 Documento enviado\";\n} else if (body.text === \"video\" || body.type === \"video\") {\n  body.type = \"video\";\n  body.media_type = \"video\";\n  body.text = \"🎥 Vídeo enviado\";\n}\n\n// Se o type vier vazio ou não bater com nada acima, garantimos que seja text\nif (!body.type) {\n  body.type = \"text\";\n}\n\nreturn [{ \n  json: { \n    ...body, \n    company_id: body.company_id ?? null \n  }, \n  binary: bin \n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        -976
+      ],
+      "id": "2d056cbd-6628-4680-9d75-70283d3fd42f",
+      "name": "Resolve company_id1"
+    },
+    {
+      "parameters": {
+        "url": "=https://wggvhxtfeucntdunhocn.supabase.co/rest/v1/wpp_instances?select=instance_name,phone_number,company_id&company_id=eq.{{ $('Webhook').item.json.body.company_id }}&instance_name=eq.{{ $json.instance_id }}&limit=1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "=sb_publishable_2cz58FxaHVzkO-lcOMbhqQ_lI0_QSkd"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer sb_publishable_2cz58FxaHVzkO-lcOMbhqQ_lI0_QSkd"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        528,
+        -976
+      ],
+      "id": "0d03bf0c-b6e8-4039-b015-2e1d2c56fb5b",
+      "name": "Lookup phone by last instance1",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "=https://wggvhxtfeucntdunhocn.supabase.co/rest/v1/wpp_instances?select=instance_name,phone_number,created_at,company_id&company_id=eq.{{ $('Webhook').item.json.body.company_id }}&phone_number=eq{{ $('Resolve company_id1').item.json.instance_phone_number }}&order=created_at.desc&limit=1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "=sb_publishable_2cz58FxaHVzkO-lcOMbhqQ_lI0_QSkd"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer sb_publishable_2cz58FxaHVzkO-lcOMbhqQ_lI0_QSkd"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        128,
+        -752
+      ],
+      "id": "aae669d0-5105-4569-8951-78d5c5a63ee3",
+      "name": "Lookup current instance by phone1",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "=https://evovps.zapcompany.com.br/instance/connectionState/{{ $('Lookup last conversation1').item.json.instance_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "=3TTUgpZcWM45Z8uS485u9UQ53zPFmR15"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        320,
+        -752
+      ],
+      "id": "17dd9bb0-792b-4423-9f50-b7273d8c21f0",
+      "name": "Evolution check current1",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.instance?.state || '' }}",
+              "rightValue": "open",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "id": "c9e3f093-3bb2-4abb-adc9-aa43e98599eb"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        528,
+        -752
+      ],
+      "id": "f5cf999b-8384-413c-a39b-473968f564df",
+      "name": "Is current open?1"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/wpp_instances?select=instance_name,company_id,is_default&company_id=eq.{{ $('Lookup last conversation1').item.json.company_id }}&is_default=eq.true&limit=1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_ANON_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_ANON_KEY }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        112,
+        -512
+      ],
+      "id": "d327470f-c467-45c2-9577-8e0f488a4b8c",
+      "name": "Lookup default instance1",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/wpp_instances?select=instance_name,status,is_default&is_default=eq.true&limit=1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "=apikey",
+              "value": "={{ $env.SUPABASE_ANON_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_ANON_KEY }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        608,
+        -480
+      ],
+      "id": "64878a4d-898a-4e38-b3ec-f2867f5bbd79",
+      "name": "Lookup default ANY1"
+    },
+    {
+      "parameters": {
+        "tableId": "wpp_conversations",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "message_type",
+              "fieldValue": "={{ $('Webhook').item.json.body.type }}"
+            },
+            {
+              "fieldId": "message",
+              "fieldValue": "={{ $('Webhook').item.json.body.text }}"
+            },
+            {
+              "fieldId": "raw_payload",
+              "fieldValue": "={{ $now }}"
+            },
+            {
+              "fieldId": "instance_id",
+              "fieldValue": "={{ $('Resolve instance_id1').item.json.instance_id }}"
+            },
+            {
+              "fieldId": "remote_jid",
+              "fieldValue": "={{ $('Webhook').item.json.body.number }}"
+            },
+            {
+              "fieldId": "from_me",
+              "fieldValue": "=true"
+            },
+            {
+              "fieldId": "company_id",
+              "fieldValue": "={{ $('Webhook').item.json.body.company_id }}"
+            },
+            {
+              "fieldId": "sent_by_user_id",
+              "fieldValue": "={{ $('Webhook').item.json.body.sent_by_user_id }}"
+            },
+            {
+              "fieldId": "message_id",
+              "fieldValue": "={{ $('Enviar texto').item.json.data.key.id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3392,
+        -400
+      ],
+      "id": "d3426e31-6d3a-4cec-9b7f-c3217a5b4481",
+      "name": "Create a row11",
+      "credentials": {
+        "supabaseApi": {
+          "id": "sSuHaYjwFjkoWxlS",
+          "name": "supabaselocal"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "wpp_conversations",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "message_type",
+              "fieldValue": "={{ $('Webhook').item.json.body.type }}"
+            },
+            {
+              "fieldId": "message",
+              "fieldValue": "={{ $('Webhook').item.json.body.text }}"
+            },
+            {
+              "fieldId": "raw_payload",
+              "fieldValue": "={{ $now }}"
+            },
+            {
+              "fieldId": "instance_id",
+              "fieldValue": "={{ $json.instance_name }}"
+            },
+            {
+              "fieldId": "remote_jid",
+              "fieldValue": "={{ $('Webhook').item.json.body.number }}"
+            },
+            {
+              "fieldId": "from_me",
+              "fieldValue": "=true"
+            },
+            {
+              "fieldId": "company_id",
+              "fieldValue": "={{ $('Webhook').item.json.body.company_id }}"
+            },
+            {
+              "fieldId": "sent_by_user_id",
+              "fieldValue": "={{ $('Webhook').item.json.body.sent_by_user_id }}"
+            },
+            {
+              "fieldId": "message_id",
+              "fieldValue": "={{ $('Enviar texto').item.json.data.key.id }}"
+            },
+            {
+              "fieldId": "context_quoted_message_id",
+              "fieldValue": "={{ $('Webhook').item.json.body.my_context.quoted_message_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2432,
+        -464
+      ],
+      "id": "8a60b3ab-e067-4f7c-be4b-790bbae69405",
+      "name": "Create a row1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "wjHkMOfQnBoTeESX",
+          "name": "SupabaseCRMServices"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_URL }}/message/sendMedia/{{ $json.instance_name }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "429683C4C977415CAAFCCE10F7D57E11"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Code in JavaScript7').item.json.number }}\",\n  \"mediatype\": \"video\",\n  \"media\": \"{{ $('Code in JavaScript7').item.json.media_url }}\",\n  \"fileName\": \"{{ $json.file_name || 'video.mp4' }}\",\n  \"caption\": \"{{ $json.caption || '' }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2960,
+        -752
+      ],
+      "id": "6f5b3240-43b6-4866-bf6d-5f43af10c348",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "operation": "send-reaction",
+        "instanceName": "={{ $json.instance_name }}",
+        "remoteJid": "={{ $json.number.includes('@') ? $json.number : $json.number + '@s.whatsapp.net' }}",
+        "messageId": "={{ $json.quoted_message_id }}",
+        "fromMe": "={{ $json.fromMe }}",
+        "reaction": "={{ $json.reaction }}"
+      },
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        1792,
+        -352
+      ],
+      "id": "fc16d589-aa25-4022-90a2-a98c1d9de6fd",
+      "name": "Reagir mensagem",
+      "credentials": {
+        "evolutionApi": {
+          "id": "kcgn2qVKU1R9vIji",
+          "name": "EvoVPS1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "wpp_instances",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "instance_name",
+              "keyValue": "={{ $('Switch').item.json.instance_name }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2224,
+        -352
+      ],
+      "id": "685f598e-6367-4386-9bdc-38543bbc1d22",
+      "name": "Get many rows Texto",
+      "credentials": {
+        "supabaseApi": {
+          "id": "wjHkMOfQnBoTeESX",
+          "name": "SupabaseCRMServices"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "wpp_conversations",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "message_type",
+              "fieldValue": "={{ $('Webhook').item.json.body.type }}"
+            },
+            {
+              "fieldId": "message",
+              "fieldValue": "={{ $('Reagir mensagem').item.json.data.message.reactionMessage.text }}"
+            },
+            {
+              "fieldId": "raw_payload",
+              "fieldValue": "={{ $('Reagir mensagem').item.json }}"
+            },
+            {
+              "fieldId": "instance_id",
+              "fieldValue": "={{ $json.instance_name }}"
+            },
+            {
+              "fieldId": "remote_jid",
+              "fieldValue": "={{ $('Webhook').item.json.body.number }}"
+            },
+            {
+              "fieldId": "from_me",
+              "fieldValue": "=true"
+            },
+            {
+              "fieldId": "company_id",
+              "fieldValue": "={{ $('Webhook').item.json.body.company_id }}"
+            },
+            {
+              "fieldId": "sent_by_user_id",
+              "fieldValue": "={{ $('Webhook').item.json.body.sent_by_user_id }}"
+            },
+            {
+              "fieldId": "message_id",
+              "fieldValue": "={{ $('Reagir mensagem').item.json.data.key.id }}"
+            },
+            {
+              "fieldId": "context_quoted_message_id",
+              "fieldValue": "={{ $('Switch').item.json.quoted_message_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3056,
+        -352
+      ],
+      "id": "d319229b-936a-45c0-9c33-9371db604690",
+      "name": "Create a row2",
+      "credentials": {
+        "supabaseApi": {
+          "id": "wjHkMOfQnBoTeESX",
+          "name": "SupabaseCRMServices"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "amount": 2
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1600,
+        -304
+      ],
+      "id": "ab40294b-28b0-4671-90b1-7bd9dbe2e0af",
+      "name": "Wait",
+      "webhookId": "a60a1a23-9ff3-478a-8412-160fe5ebeb96"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://wggvhxtfeucntdunhocn.supabase.co/storage/v1/object/whatsapp-media/{{ $json.instance_id }}/{{ $json.number }}/{{ encodeURIComponent($now.toFormat('yyyyMMdd_HHmmss') + '_' + $json.file_name) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "=apikey",
+              "value": "=sb_publishable_2cz58FxaHVzkO-lcOMbhqQ_lI0_QSkd"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer sb_publishable_2cz58FxaHVzkO-lcOMbhqQ_lI0_QSkd"
+            },
+            {
+              "name": "Content-Type",
+              "value": "={{ $json.mimetype || 'application/octet-stream' }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "file",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1632,
+        -176
+      ],
+      "id": "c3615add-3926-4baf-ab59-de6d628c6b66",
+      "name": "HTTP Request10"
+    },
+    {
+      "parameters": {
+        "jsCode": "const identity = $('Resolve instance_id1').first().json;\nconst upload = $input.first().json;\n\nconst key =\n  upload?.Key ||\n  upload?.key ||\n  upload?.path ||\n  upload?.fullPath ||\n  upload?.Name ||\n  upload?.name ||\n  null;\n\nif (!key) {\n  throw new Error('Upload não retornou uma chave de arquivo válida.');\n}\n\nconst cleanKey = String(key).replace(/^\\/+/, '');\nconst media_url = `${$env.SUPABASE_URL}/storage/v1/object/public/${encodeURI(cleanKey)}`;\n\nreturn [{\n  json: {\n    ...identity,\n    media_url\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        -176
+      ],
+      "id": "866c1db0-9329-43cf-aff6-8acdded9738e",
+      "name": "Code in JavaScript9"
+    },
+    {
+      "parameters": {
+        "tableId": "wpp_conversations",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "message_type",
+              "fieldValue": "={{ $('Code in JavaScript9').first().json.media_type }}"
+            },
+            {
+              "fieldId": "message",
+              "fieldValue": "={{ $('Code in JavaScript9').first().json.caption || 'documento' }}"
+            },
+            {
+              "fieldId": "media_url",
+              "fieldValue": "={{ $('Code in JavaScript9').first().json.media_url }}"
+            },
+            {
+              "fieldId": "raw_payload",
+              "fieldValue": "={{ $('Code in JavaScript9').first().json }}"
+            },
+            {
+              "fieldId": "instance_id",
+              "fieldValue": "={{ $('Get many rows11').item.json.instance_name }}"
+            },
+            {
+              "fieldId": "remote_jid",
+              "fieldValue": "={{ $('Code in JavaScript9').first().json.number }}"
+            },
+            {
+              "fieldId": "from_me",
+              "fieldValue": "=true"
+            },
+            {
+              "fieldId": "company_id",
+              "fieldValue": "={{ $('Get many rows11').first().json.company_id }}"
+            },
+            {
+              "fieldId": "sent_by_user_id",
+              "fieldValue": "={{ $('Code in JavaScript9').first().json.sent_by_user_id }}"
+            },
+            {
+              "fieldId": "client_media_id",
+              "fieldValue": "={{ $('HTTP Request10').first().json.Id }}"
+            },
+            {
+              "fieldId": "message_id",
+              "fieldValue": "={{ $json.key.id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3056,
+        -176
+      ],
+      "id": "912e18c0-3443-4d48-9ef6-b5482d71a29f",
+      "name": "Create a row8",
+      "credentials": {
+        "supabaseApi": {
+          "id": "wjHkMOfQnBoTeESX",
+          "name": "SupabaseCRMServices"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "operation": "send-document",
+        "instanceName": "={{ $json.instance_name }}",
+        "remoteJid": "={{ $('Code in JavaScript9').item.json.number }}",
+        "media": "={{ $('Code in JavaScript9').item.json.media_url }}",
+        "caption": "=docx",
+        "fileName": "={{ $('Webhook').item.json.body.file_name }}",
+        "options_message": {
+          "delay": 2200,
+          "quoted": {
+            "messageQuoted": {
+              "messageId": "={{ $('Webhook').item.json.body.quoted.key.id }}"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        2704,
+        -160
+      ],
+      "id": "52288de8-b447-4ae3-a03d-5590a341edde",
+      "name": "Enviar documento1",
+      "credentials": {
+        "evolutionApi": {
+          "id": "kcgn2qVKU1R9vIji",
+          "name": "EvoVPS1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "wpp_conversations",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "message_type",
+              "fieldValue": "={{ $('Code in JavaScript').first().json.media_type }}"
+            },
+            {
+              "fieldId": "message",
+              "fieldValue": "={{ $('Code in JavaScript').first().json.caption }}"
+            },
+            {
+              "fieldId": "media_url",
+              "fieldValue": "={{ $('Code in JavaScript').first().json.media_url }}"
+            },
+            {
+              "fieldId": "raw_payload",
+              "fieldValue": "={{ $('Code in JavaScript').first().json }}"
+            },
+            {
+              "fieldId": "instance_id",
+              "fieldValue": "={{ $('Get many rows').item.json.instance_name }}"
+            },
+            {
+              "fieldId": "remote_jid",
+              "fieldValue": "={{ $('Code in JavaScript').first().json.number }}"
+            },
+            {
+              "fieldId": "from_me",
+              "fieldValue": "=true"
+            },
+            {
+              "fieldId": "company_id",
+              "fieldValue": "={{ $('Get many rows').first().json.company_id }}"
+            },
+            {
+              "fieldId": "sent_by_user_id",
+              "fieldValue": "={{ $('Get many rows').first().json.user_id }}"
+            },
+            {
+              "fieldId": "client_media_id",
+              "fieldValue": "={{ $('HTTP Request').first().json.Id }}"
+            },
+            {
+              "fieldId": "message_id",
+              "fieldValue": "={{ $json.data.key.id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2336,
+        -1328
+      ],
+      "id": "0a246b7e-a38e-4333-96b3-6beafc3483ab",
+      "name": "Create a row9",
+      "retryOnFail": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "wjHkMOfQnBoTeESX",
+          "name": "SupabaseCRMServices"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "wpp_instances",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "instance_name",
+              "condition": "eq",
+              "keyValue": "={{ $json.instance_name }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2256,
+        -176
+      ],
+      "id": "95159130-5d72-4daf-95a2-a880110cf503",
+      "name": "Get many rows11",
+      "credentials": {
+        "supabaseApi": {
+          "id": "wjHkMOfQnBoTeESX",
+          "name": "SupabaseCRMServices"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://wggvhxtfeucntdunhocn.supabase.co/storage/v1/object/whatsapp-media/{{ $json.instance.instanceName }}/{{ $('Resolve company_id1').item.json.number }}/{{ $now }}.m4a",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "=apikey",
+              "value": "=sb_publishable_2cz58FxaHVzkO-lcOMbhqQ_lI0_QSkd"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer sb_publishable_2cz58FxaHVzkO-lcOMbhqQ_lI0_QSkd"
+            },
+            {
+              "name": "Content-Type",
+              "value": "={{ $json.file_type }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "file",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1616,
+        32
+      ],
+      "id": "75eb48e5-0e4b-4c20-a8dd-320b764c0fb9",
+      "name": "HTTP Request2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const identity = $('Resolve instance_id1').first().json;\nconst upload = $input.first().json;\n\n// upload.Key já vem como: whatsapp-media/448697/553193044907/arquivo.ogg\nconst media_url = upload?.Key\n  ? `${$env.SUPABASE_URL}/storage/v1/object/public/${upload.Key}`\n  : null;\n\nreturn [\n  {\n    json: {\n      ...identity,\n      media_url\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1840,
+        32
+      ],
+      "id": "1c5c1ed8-a6d5-46cd-8702-731c933f8fb9",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "operation": "send-audio",
+        "instanceName": "={{ $json.instance_name }}",
+        "remoteJid": "={{ $('Code in JavaScript1').item.json.number }}",
+        "media": "={{ $('Code in JavaScript1').item.json.media_url }}",
+        "options_message": {
+          "delay": 2200
+        }
+      },
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        2256,
+        32
+      ],
+      "id": "23336e16-8bf6-455c-9be4-fa2849070e89",
+      "name": "Enviar audio1",
+      "retryOnFail": true,
+      "credentials": {
+        "evolutionApi": {
+          "id": "kcgn2qVKU1R9vIji",
+          "name": "EvoVPS1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "wpp_instances",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "instance_name",
+              "condition": "eq",
+              "keyValue": "={{ $json.instance_name }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2032,
+        32
+      ],
+      "id": "b84da472-2724-45f4-b53b-8bc22b2ddd0e",
+      "name": "Get many rows1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "wjHkMOfQnBoTeESX",
+          "name": "SupabaseCRMServices"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "wpp_conversations",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "message_type",
+              "fieldValue": "={{ $('Code in JavaScript1').first().json.media_type }}"
+            },
+            {
+              "fieldId": "message",
+              "fieldValue": "={{ $('Code in JavaScript1').first().json.caption }}"
+            },
+            {
+              "fieldId": "media_url",
+              "fieldValue": "={{ $('Code in JavaScript1').first().json.media_url }}"
+            },
+            {
+              "fieldId": "raw_payload",
+              "fieldValue": "={{ $('Code in JavaScript1').first().json }}"
+            },
+            {
+              "fieldId": "instance_id",
+              "fieldValue": "={{ $('Get many rows1').item.json.instance_name }}"
+            },
+            {
+              "fieldId": "remote_jid",
+              "fieldValue": "={{ $('Code in JavaScript1').first().json.number }}"
+            },
+            {
+              "fieldId": "from_me",
+              "fieldValue": "=true"
+            },
+            {
+              "fieldId": "company_id",
+              "fieldValue": "={{ $('Get many rows1').first().json.company_id }}"
+            },
+            {
+              "fieldId": "sent_by_user_id",
+              "fieldValue": "={{ $('Get many rows1').first().json.user_id }}"
+            },
+            {
+              "fieldId": "client_media_id",
+              "fieldValue": "={{ $('HTTP Request2').first().json.Id }}"
+            },
+            {
+              "fieldId": "message_id",
+              "fieldValue": "={{ $json.data.key.id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2448,
+        32
+      ],
+      "id": "efb84927-7112-4e32-b592-03e9b2f5327f",
+      "name": "Create a row10",
+      "retryOnFail": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "wjHkMOfQnBoTeESX",
+          "name": "SupabaseCRMServices"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Recupera o número do erro anterior\n// Ajuste o nome do nó [\"Enviar audio\"] para o nome exato do seu nó\nconst errorDesc = $node[\"Enviar audio\"].json.errorDescription;\nconst match = errorDesc.match(/\"number\":\"(\\d+)\"/);\n\nif (!match) {\n    return { error: \"Número não encontrado no log de erro\" };\n}\n\nlet num = match[1]; // Ex: 5512998056281\nconst ddi = num.substring(0, 2); // 55\nconst ddd = num.substring(2, 4); // 12\nconst restante = num.substring(4); // O que vem depois do DDD\n\nlet numeroCorrigido = num;\n\nif (num.length === 13) {\n    // Caso 1: Está com 13 dígitos. Vamos tentar remover o 9.\n    // O 9 é o quinto dígito (índice 4)\n    numeroCorrigido = ddi + ddd + num.substring(5);\n} else if (num.length === 12) {\n    // Caso 2: Está com 12 dígitos. Vamos tentar adicionar o 9.\n    numeroCorrigido = ddi + ddd + '9' + num.substring(4);\n}\n\nreturn {\n    original: num,\n    numeroCorrigido: numeroCorrigido,\n    foiAlterado: num !== numeroCorrigido\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2352,
+        -1152
+      ],
+      "id": "eb990be1-a827-49e8-a320-d3af3f722334",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "operation": "send-audio",
+        "instanceName": "={{ $json.instance_name }}",
+        "remoteJid": "={{ $('Code in JavaScript').item.json.number }}",
+        "media": "={{ $('Code in JavaScript').item.json.media_url }}",
+        "options_message": {
+          "delay": 2200
+        }
+      },
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        2496,
+        -1152
+      ],
+      "id": "55c15ed4-ceb7-4ec8-bc45-0fcb644bc252",
+      "name": "Enviar audio2",
+      "retryOnFail": true,
+      "credentials": {
+        "evolutionApi": {
+          "id": "kcgn2qVKU1R9vIji",
+          "name": "EvoVPS1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "wpp_conversations",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "message_type",
+              "fieldValue": "={{ $('Code in JavaScript8').first().json.media_type }}"
+            },
+            {
+              "fieldId": "message",
+              "fieldValue": "={{ $('Code in JavaScript8').first().json.caption || 'documento' }}"
+            },
+            {
+              "fieldId": "media_url",
+              "fieldValue": "={{ $('Code in JavaScript8').first().json.media_url }}"
+            },
+            {
+              "fieldId": "raw_payload",
+              "fieldValue": "={{ $('Code in JavaScript8').first().json }}"
+            },
+            {
+              "fieldId": "instance_id",
+              "fieldValue": "={{ $('Get many rows12').item.json.instance_name }}"
+            },
+            {
+              "fieldId": "remote_jid",
+              "fieldValue": "={{ $('Code in JavaScript8').first().json.number }}"
+            },
+            {
+              "fieldId": "from_me",
+              "fieldValue": "=true"
+            },
+            {
+              "fieldId": "company_id",
+              "fieldValue": "={{ $('Get many rows12').first().json.company_id }}"
+            },
+            {
+              "fieldId": "sent_by_user_id",
+              "fieldValue": "={{ $('Code in JavaScript8').first().json.sent_by_user_id }}"
+            },
+            {
+              "fieldId": "client_media_id",
+              "fieldValue": "={{ $('HTTP Request9').first().json.Id }}"
+            },
+            {
+              "fieldId": "message_id",
+              "fieldValue": "={{ $json.key.id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2752,
+        -528
+      ],
+      "id": "5455fe49-73b5-424c-b02f-aee3f6092fe9",
+      "name": "Create a row12",
+      "credentials": {
+        "supabaseApi": {
+          "id": "wjHkMOfQnBoTeESX",
+          "name": "SupabaseCRMServices"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "operation": "send-document",
+        "instanceName": "={{ $json.instance_name }}",
+        "remoteJid": "={{ $('Resolve instance_id1').item.json.phone }}",
+        "media": "={{ $('Resolve instance_id1').item.json.data }}",
+        "caption": "={{ $('Code in JavaScript8').item.json.caption }}",
+        "fileName": "={{ $('Webhook').item.json.body.file_name }}",
+        "options_message": {
+          "delay": 2200,
+          "quoted": {
+            "messageQuoted": {
+              "messageId": "={{ $('Webhook').item.json.body.quoted.key.id }}"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        2560,
+        -528
+      ],
+      "id": "7908492e-e194-45cf-be4c-52b268d64fd2",
+      "name": "Enviar documento2",
+      "credentials": {
+        "evolutionApi": {
+          "id": "kcgn2qVKU1R9vIji",
+          "name": "EvoVPS1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "wpp_instances",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "instance_name",
+              "condition": "eq",
+              "keyValue": "={{ $('HTTP Request9').item.json.instance.instanceName }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2032,
+        -544
+      ],
+      "id": "223eec78-bcdc-4776-83f4-337f39634762",
+      "name": "Get many rows12",
+      "credentials": {
+        "supabaseApi": {
+          "id": "wjHkMOfQnBoTeESX",
+          "name": "SupabaseCRMServices"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body ?? $input.first().json;\nconst b64 = body.attachment?.data || body.data;\nif (!b64) return [{ json: body }];\n\nconst binary = Buffer.from(b64, 'base64');\n\nreturn [{\n  json: { ...body },\n  binary: {\n    file: {\n      data: binary.toString('base64'),\n      mimeType: body.attachment?.mime_type || body.mime_type || 'application/pdf',\n      fileName: body.attachment?.file_name || body.file_name || 'arquivo.pdf',\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        -624
+      ],
+      "id": "32781674-d0f7-4fa0-ba72-c6229e80a11d",
+      "name": "Code in JavaScript3"
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "infnitycrm.zapcompany.com.br",
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+            "content-length": "7727",
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "accept-language": "pt-BR,pt;q=0.9",
+            "cdn-loop": "cloudflare; loops=1",
+            "cf-connecting-ip": "170.80.67.133",
+            "cf-ipcountry": "BR",
+            "cf-ray": "9faa3f62ba12de17-GIG",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "content-type": "application/json",
+            "origin": "https://ferramentas-infnityservices.o2gptz.easypanel.host",
+            "priority": "u=1, i",
+            "referer": "https://ferramentas-infnityservices.o2gptz.easypanel.host/",
+            "sec-ch-ua": "\"Chromium\";v=\"148\", \"Google Chrome\";v=\"148\", \"Not/A)Brand\";v=\"99\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"Windows\"",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "cross-site",
+            "x-forwarded-for": "170.80.67.133, 172.69.90.43",
+            "x-forwarded-host": "infnitycrm.zapcompany.com.br",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "ca81c1ca7253",
+            "x-real-ip": "172.69.90.43"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "company_id": "399b45aa-5f0a-4677-9ed7-96a8c28f274b",
+            "phone": "5531988855846",
+            "number": "5531988855846",
+            "type": "document",
+            "text": "OS_000008.pdf",
+            "data": "JVBERi0xLjMKJbrfrOAKMyAwIG9iago8PC9UeXBlIC9QYWdlCi9QYXJlbnQgMSAwIFIKL1Jlc291cmNlcyAyIDAgUgovTWVkaWFCb3ggWzAgMCA1OTUuMjc5OTk5OTk5OTk5OTcyNyA4NDEuODg5OTk5OTk5OTk5OTg2NF0KL0NvbnRlbnRzIDQgMCBSCj4+CmVuZG9iago0IDAgb2JqCjw8Ci9MZW5ndGggMjU0NAo+PgpzdHJlYW0KMC41NjcwMDAwMDAwMDAwMDAxIHcKMCBHCkJUCi9GMiAxNCBUZgoxNi4wOTk5OTk5OTk5OTk5OTc5IFRMCjAgZwozOS42ODUwMzkzNzAwNzg3NDA3IDc5Ni41MzU2NjkyOTEzMzg1MzU5IFRkCihNaW5oYSBFbXByZXNhKSBUagpFVApCVAovRjEgOCBUZgo5LjE5OTk5OTk5OTk5OTk5OTMgVEwKMC4zOTIgZwozOS42ODUwMzkzNzAwNzg3NDA3IDc4Mi4zNjI0NDA5NDQ4ODE4ODI0IFRkCihyb2Jzb25jb2VsaG9AaG90bWFpbC5jb20uYnIpIFRqCkVUCkJUCi9GMSA5IFRmCjEwLjM0OTk5OTk5OTk5OTk5OTYgVEwKMC4zOTIgZwozOS42ODUwMzkzNzAwNzg3NDA3IDc2OC4xODkyMTI1OTg0MjUyMjg5IFRkCihPUkRFTSBERSBTRVJWScdPKSBUagpFVApCVAovRjIgMjAgVGYKMjMuIFRMCjAuIGcKNDQ0LjE5NDk2MDYyOTkyMTE4MzcgNzkwLjg2NjM3Nzk1Mjc1NTg5NzIgVGQKKE9TICMwMDAwMDgpIFRqCkVUCkJUCi9GMSA5IFRmCjEwLjM0OTk5OTk5OTk5OTk5OTYgVEwKMC4zOTIgZwo1MTkuNDE0OTYwNjI5OTIxMjExIDc3My44NTg1MDM5MzcwMDc4Njc1IFRkCihFbnRyZWd1ZSkgVGoKRVQKMC44NiBHCjM5LjY4NTAzOTM3MDA3ODc0MDcgNzUxLjE4MTMzODU4MjY3NzA4NTUgbQo1NTUuNTk0OTYwNjI5OTIxMTYwOSA3NTEuMTgxMzM4NTgyNjc3MDg1NSBsClMKQlQKL0YyIDEwIFRmCjExLjUgVEwKMC4gZwozOS42ODUwMzkzNzAwNzg3NDA3IDczNC4xNzM0NjQ1NjY5MjkxNjk1IFRkCihDTElFTlRFKSBUagpFVApCVAovRjIgMTAgVGYKMTEuNSBUTAowLiBnCjMwMy4zMDkyOTEzMzg1ODI2MjUgNzM0LjE3MzQ2NDU2NjkyOTE2OTUgVGQKKEVRVUlQQU1FTlRPKSBUagpFVApCVAovRjEgOSBUZgoxMC4zNDk5OTk5OTk5OTk5OTk2IFRMCjAuIGcKMzkuNjg1MDM5MzcwMDc4NzQwNyA3MjAuMDAwMjM2MjIwNDcyNDAyMiBUZAooUm9ic29uKSBUagpFVApCVAovRjEgOSBUZgoxMC4zNDk5OTk5OTk5OTk5OTk2IFRMCjAuIGcKMzkuNjg1MDM5MzcwMDc4NzQwNyA3MDguNjYxNjUzNTQzMzA3MDExMiBUZAooVGVsOiBcKDMxXCkgOTg4ODUtNTg0NikgVGoKRVQKQlQKL0YxIDkgVGYKMTAuMzQ5OTk5OTk5OTk5OTk5NiBUTAowLiBnCjMwMy4zMDkyOTEzMzg1ODI2MjUgNzIwLjAwMDIzNjIyMDQ3MjQwMjIgVGQKKJcpIFRqCkVUCjAuODYgRwozOS42ODUwMzkzNzAwNzg3NDA3IDY4NS45ODQ0ODgxODg5NzYzNDI4IG0KNTU1LjU5NDk2MDYyOTkyMTE2MDkgNjg1Ljk4NDQ4ODE4ODk3NjM0MjggbApTCkJUCi9GMSA5IFRmCjEwLjM0OTk5OTk5OTk5OTk5OTYgVEwKMC4zMTQgZwozOS42ODUwMzkzNzAwNzg3NDA3IDY3MS44MTEyNTk4NDI1MTk2ODkzIFRkCihBYmVydHVyYTogMTIvMDUvMjAyNiAgICCVICAgIENvbmNsdXPjbzogMTIvMDUvMjAyNiAgICCVICAgIEVudHJlZ2E6IDEyLzA1LzIwMjYgICAglSAgICBHYXJhbnRpYSBhdOk6IDA5LzA4LzIwMjYgICAglSAgICBU6WNuaWNvOiBSb2Jzb24pIFRqCkVUCkJUCi9GMiAxMCBUZgoxMS41IFRMCjAuIGcKMzkuNjg1MDM5MzcwMDc4NzQwNyA2NDkuMTM0MDk0NDg4MTg4OTA3MiBUZAooREVGRUlUTyBSRUxBVEFETykgVGoKRVQKQlQKL0YxIDkgVGYKMTAuMzQ5OTk5OTk5OTk5OTk5NiBUTAowLiBnCjM5LjY4NTAzOTM3MDA3ODc0MDcgNjM0Ljk2MDg2NjE0MTczMjI1MzcgVGQKKFRlc2V0KSBUagpFVAowLjU5IEcKMzkuNjg1MDM5MzcwMDc4NzQwNyA5OS4yMTI1OTg0MjUxOTY4NTg5IG0KMjc3Ljc5NzQ4MDMxNDk2MDU4MDUgOTkuMjEyNTk4NDI1MTk2ODU4OSBsClMKMzE3LjQ4MjUxOTY4NTAzOTMzNTQgOTkuMjEyNTk4NDI1MTk2ODU4OSBtCjU1NS41OTQ5NjA2Mjk5MjExNjA5IDk5LjIxMjU5ODQyNTE5Njg1ODkgbApTCkJUCi9GMSA4IFRmCjkuMTk5OTk5OTk5OTk5OTk5MyBUTAowLjMxNCBnCjM5LjY4NTAzOTM3MDA3ODc0MDcgODcuODc0MDE1NzQ4MDMxNTI0NyBUZAooQ2xpZW50ZSCXIFJvYnNvbikgVGoKRVQKQlQKL0YxIDggVGYKOS4xOTk5OTk5OTk5OTk5OTkzIFRMCjAuMzE0IGcKMzE3LjQ4MjUxOTY4NTAzOTMzNTQgODcuODc0MDE1NzQ4MDMxNTI0NyBUZAooUmVzcG9uc+F2ZWwgdOljbmljbyCXIFJvYnNvbikgVGoKRVQKQlQKL0YxIDcgVGYKOC4wNDk5OTk5OTk5OTk5OTg5IFRMCjAuNDcxIGcKMjIxLjE5OTk5OTk5OTk5OTkwMzQgNjUuMTk2ODUwMzkzNzAwODU2MyBUZAooRXF1aXBhbWVudG8gZW50cmVndWUgZSByZWNlYmlkbyBlbSAxMi8wNS8yMDI2KSBUagpFVApCVAovRjEgNyBUZgo4LjA0OTk5OTk5OTk5OTk5ODkgVEwKMC40NzEgZwoxNDIuNDE1MDAwMDAwMDAwMDIwNSA1My44NTgyNjc3MTY1MzU0NjUzIFRkCihHYXJhbnRpYSBkYSBwcmVzdGHn428gZGUgc2VydmnnbyB24WxpZGEgYXTpIDA5LzA4LzIwMjYgY29uZm9ybWUgQ/NkaWdvIGRlIERlZmVzYSBkbyBDb25zdW1pZG9yLikgVGoKRVQKQlQKL0YxIDggVGYKOS4xOTk5OTk5OTk5OTk5OTkzIFRMCjAuNTg4IGcKMjAxLjMxOTk5OTk5OTk5OTkzNjMgMTcuMDA3ODc0MDE1NzQ4MDI5NyBUZAooTWluaGEgRW1wcmVzYSCVIERvY3VtZW50byBnZXJhZG8gcGVsbyBPU01hbmFnZXIpIFRqCkVUCmVuZHN0cmVhbQplbmRvYmoKMSAwIG9iago8PC9UeXBlIC9QYWdlcwovS2lkcyBbMyAwIFIgXQovQ291bnQgMQo+PgplbmRvYmoKNSAwIG9iago8PAovVHlwZSAvRm9udAovQmFzZUZvbnQgL0hlbHZldGljYQovU3VidHlwZSAvVHlwZTEKL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcKL0ZpcnN0Q2hhciAzMgovTGFzdENoYXIgMjU1Cj4+CmVuZG9iago2IDAgb2JqCjw8Ci9UeXBlIC9Gb250Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQKL1N1YnR5cGUgL1R5cGUxCi9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nCi9GaXJzdENoYXIgMzIKL0xhc3RDaGFyIDI1NQo+PgplbmRvYmoKNyAwIG9iago8PAovVHlwZSAvRm9udAovQmFzZUZvbnQgL0hlbHZldGljYS1PYmxpcXVlCi9TdWJ0eXBlIC9UeXBlMQovRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZwovRmlyc3RDaGFyIDMyCi9MYXN0Q2hhciAyNTUKPj4KZW5kb2JqCjggMCBvYmoKPDwKL1R5cGUgL0ZvbnQKL0Jhc2VGb250IC9IZWx2ZXRpY2EtQm9sZE9ibGlxdWUKL1N1YnR5cGUgL1R5cGUxCi9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nCi9GaXJzdENoYXIgMzIKL0xhc3RDaGFyIDI1NQo+PgplbmRvYmoKOSAwIG9iago8PAovVHlwZSAvRm9udAovQmFzZUZvbnQgL0NvdXJpZXIKL1N1YnR5cGUgL1R5cGUxCi9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nCi9GaXJzdENoYXIgMzIKL0xhc3RDaGFyIDI1NQo+PgplbmRvYmoKMTAgMCBvYmoKPDwKL1R5cGUgL0ZvbnQKL0Jhc2VGb250IC9Db3VyaWVyLUJvbGQKL1N1YnR5cGUgL1R5cGUxCi9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nCi9GaXJzdENoYXIgMzIKL0xhc3RDaGFyIDI1NQo+PgplbmRvYmoKMTEgMCBvYmoKPDwKL1R5cGUgL0ZvbnQKL0Jhc2VGb250IC9Db3VyaWVyLU9ibGlxdWUKL1N1YnR5cGUgL1R5cGUxCi9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nCi9GaXJzdENoYXIgMzIKL0xhc3RDaGFyIDI1NQo+PgplbmRvYmoKMTIgMCBvYmoKPDwKL1R5cGUgL0ZvbnQKL0Jhc2VGb250IC9Db3VyaWVyLUJvbGRPYmxpcXVlCi9TdWJ0eXBlIC9UeXBlMQovRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZwovRmlyc3RDaGFyIDMyCi9MYXN0Q2hhciAyNTUKPj4KZW5kb2JqCjEzIDAgb2JqCjw8Ci9UeXBlIC9Gb250Ci9CYXNlRm9udCAvVGltZXMtUm9tYW4KL1N1YnR5cGUgL1R5cGUxCi9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nCi9GaXJzdENoYXIgMzIKL0xhc3RDaGFyIDI1NQo+PgplbmRvYmoKMTQgMCBvYmoKPDwKL1R5cGUgL0ZvbnQKL0Jhc2VGb250IC9UaW1lcy1Cb2xkCi9TdWJ0eXBlIC9UeXBlMQovRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZwovRmlyc3RDaGFyIDMyCi9MYXN0Q2hhciAyNTUKPj4KZW5kb2JqCjE1IDAgb2JqCjw8Ci9UeXBlIC9Gb250Ci9CYXNlRm9udCAvVGltZXMtSXRhbGljCi9TdWJ0eXBlIC9UeXBlMQovRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZwovRmlyc3RDaGFyIDMyCi9MYXN0Q2hhciAyNTUKPj4KZW5kb2JqCjE2IDAgb2JqCjw8Ci9UeXBlIC9Gb250Ci9CYXNlRm9udCAvVGltZXMtQm9sZEl0YWxpYwovU3VidHlwZSAvVHlwZTEKL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcKL0ZpcnN0Q2hhciAzMgovTGFzdENoYXIgMjU1Cj4+CmVuZG9iagoxNyAwIG9iago8PAovVHlwZSAvRm9udAovQmFzZUZvbnQgL1phcGZEaW5nYmF0cwovU3VidHlwZSAvVHlwZTEKL0ZpcnN0Q2hhciAzMgovTGFzdENoYXIgMjU1Cj4+CmVuZG9iagoxOCAwIG9iago8PAovVHlwZSAvRm9udAovQmFzZUZvbnQgL1N5bWJvbAovU3VidHlwZSAvVHlwZTEKL0ZpcnN0Q2hhciAzMgovTGFzdENoYXIgMjU1Cj4+CmVuZG9iagoyIDAgb2JqCjw8Ci9Qcm9jU2V0IFsvUERGIC9UZXh0IC9JbWFnZUIgL0ltYWdlQyAvSW1hZ2VJXQovRm9udCA8PAovRjEgNSAwIFIKL0YyIDYgMCBSCi9GMyA3IDAgUgovRjQgOCAwIFIKL0Y1IDkgMCBSCi9GNiAxMCAwIFIKL0Y3IDExIDAgUgovRjggMTIgMCBSCi9GOSAxMyAwIFIKL0YxMCAxNCAwIFIKL0YxMSAxNSAwIFIKL0YxMiAxNiAwIFIKL0YxMyAxNyAwIFIKL0YxNCAxOCAwIFIKPj4KL1hPYmplY3QgPDwKPj4KPj4KZW5kb2JqCjE5IDAgb2JqCjw8Ci9Qcm9kdWNlciAoanNQREYgNC4yLjEpCi9DcmVhdGlvbkRhdGUgKEQ6MjAyNjA1MTIxMTUyMzYtMDMnMDAnKQo+PgplbmRvYmoKMjAgMCBvYmoKPDwKL1R5cGUgL0NhdGFsb2cKL1BhZ2VzIDEgMCBSCi9PcGVuQWN0aW9uIFszIDAgUiAvRml0SCBudWxsXQovUGFnZUxheW91dCAvT25lQ29sdW1uCj4+CmVuZG9iagp4cmVmCjAgMjEKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAyNzQ4IDAwMDAwIG4gCjAwMDAwMDQ1NjUgMDAwMDAgbiAKMDAwMDAwMDAxNSAwMDAwMCBuIAowMDAwMDAwMTUyIDAwMDAwIG4gCjAwMDAwMDI4MDUgMDAwMDAgbiAKMDAwMDAwMjkzMCAwMDAwMCBuIAowMDAwMDAzMDYwIDAwMDAwIG4gCjAwMDAwMDMxOTMgMDAwMDAgbiAKMDAwMDAwMzMzMCAwMDAwMCBuIAowMDAwMDAzNDUzIDAwMDAwIG4gCjAwMDAwMDM1ODIgMDAwMDAgbiAKMDAwMDAwMzcxNCAwMDAwMCBuIAowMDAwMDAzODUwIDAwMDAwIG4gCjAwMDAwMDM5NzggMDAwMDAgbiAKMDAwMDAwNDEwNSAwMDAwMCBuIAowMDAwMDA0MjM0IDAwMDAwIG4gCjAwMDAwMDQzNjcgMDAwMDAgbiAKMDAwMDAwNDQ2OSAwMDAwMCBuIAowMDAwMDA0ODEzIDAwMDAwIG4gCjAwMDAwMDQ4OTkgMDAwMDAgbiAKdHJhaWxlcgo8PAovU2l6ZSAyMQovUm9vdCAyMCAwIFIKL0luZm8gMTkgMCBSCi9JRCBbIDxEMzE4RUI3RTZGQTc5RUI1MDBEQjZBRjQwNjE0QzgxNj4gPEQzMThFQjdFNkZBNzlFQjUwMERCNkFGNDA2MTRDODE2PiBdCj4+CnN0YXJ0eHJlZgo1MDAzCiUlRU9G",
+            "file_name": "OS_000008.pdf",
+            "fileName": "OS_000008.pdf",
+            "mime_type": "application/pdf",
+            "user_id": "36bdb473-b73b-49ba-8645-4cc04005f2d0"
+          },
+          "webhookUrl": "https://infnitycrm.zapcompany.com.br/webhook/enviosmidiacrmservices",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Resolve company_id1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File5": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Get many rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar audio": {
+      "main": [
+        [
+          {
+            "node": "Create a row9",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request6",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request8",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request9",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar texto",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request10",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request6": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript6": {
+      "main": [
+        [
+          {
+            "node": "Get many rows8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar imagem": {
+      "main": [
+        [
+          {
+            "node": "Create a row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request8": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript7": {
+      "main": [
+        [
+          {
+            "node": "Get many rows9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request9": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript8",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript8": {
+      "main": [
+        [
+          {
+            "node": "Get many rows10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar documento": {
+      "main": [
+        [
+          {
+            "node": "Create a row7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar video": {
+      "main": [
+        [
+          {
+            "node": "Create a row6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many rows": {
+      "main": [
+        [
+          {
+            "node": "Enviar audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many rows8": {
+      "main": [
+        [
+          {
+            "node": "Enviar imagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many rows9": {
+      "main": [
+        [
+          {
+            "node": "Enviar video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many rows10": {
+      "main": [
+        [
+          {
+            "node": "Enviar documento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup last conversation1": {
+      "main": [
+        [
+          {
+            "node": "Lookup phone by last instance1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve instance_id1": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar texto": {
+      "main": [
+        [
+          {
+            "node": "Get many rows Texto1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many rows Texto1": {
+      "main": [
+        [
+          {
+            "node": "Create a row1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve company_id1": {
+      "main": [
+        [
+          {
+            "node": "Lookup last conversation1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup phone by last instance1": {
+      "main": [
+        [
+          {
+            "node": "Lookup current instance by phone1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup current instance by phone1": {
+      "main": [
+        [
+          {
+            "node": "Evolution check current1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evolution check current1": {
+      "main": [
+        [
+          {
+            "node": "Is current open?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is current open?1": {
+      "main": [
+        [
+          {
+            "node": "Resolve instance_id1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup default instance1": {
+      "main": [
+        [
+          {
+            "node": "Resolve instance_id1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many rows Texto": {
+      "main": [
+        [
+          {
+            "node": "Create a row2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reagir mensagem": {
+      "main": [
+        [
+          {
+            "node": "Get many rows Texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Reagir mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request10": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript9": {
+      "main": [
+        [
+          {
+            "node": "Get many rows11",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar documento1": {
+      "main": [
+        [
+          {
+            "node": "Create a row8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many rows11": {
+      "main": [
+        [
+          {
+            "node": "Enviar documento1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request2": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Get many rows1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar audio1": {
+      "main": [
+        [
+          {
+            "node": "Create a row10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many rows1": {
+      "main": [
+        [
+          {
+            "node": "Enviar audio1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Enviar audio2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar documento2": {
+      "main": [
+        [
+          {
+            "node": "Create a row12",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many rows12": {
+      "main": [
+        [
+          {
+            "node": "Enviar documento2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript3": {
+      "main": [
+        [
+          {
+            "node": "Get many rows12",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "04513219-250b-4a3b-880d-3e1f967dfe2b",
+  "meta": {
+    "instanceId": "0074c1bcdc5050343315de11d2e41f41932acaa507e1926859c2bdb2b4581f85"
+  },
+  "id": "X0Hq3ab634MhKUhc",
+  "tags": []
+}

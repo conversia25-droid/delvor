@@ -1,0 +1,286 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
+    --primary-light: 221 83% 65%;
+    --primary-dark: 221 83% 43%;
+
+    --secondary: 214 32% 91%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 221 83% 53%;
+    --accent-foreground: 0 0% 100%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    
+    --critical: 0 84% 60%;
+    --critical-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 221 83% 53%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 221 83% 53%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 217 33% 17%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217 33% 17%;
+    --sidebar-ring: 221 83% 53%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(221 83% 53%) 0%, hsl(221 83% 43%) 100%);
+    --gradient-success: linear-gradient(135deg, hsl(142 76% 36%) 0%, hsl(142 76% 26%) 100%);
+    --gradient-critical: linear-gradient(135deg, hsl(0 84% 60%) 0%, hsl(0 84% 50%) 100%);
+    
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+    
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .dark {
+    /* Base neutra puxada pra azul (era 260 = violeta). Backgrounds ficam
+       com um leve tom azul-marinho em vez de roxo escuro. */
+    --background: 220 45% 8%;
+    --foreground: 220 20% 95%;
+
+    --card: 220 35% 12%;
+    --card-foreground: 220 20% 95%;
+
+    --popover: 220 35% 12%;
+    --popover-foreground: 220 20% 95%;
+
+    /* Primary = blue-500 (mesma família do mark do BrandLogo). */
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --primary-light: 217 91% 70%;
+    --primary-dark: 217 91% 50%;
+
+    --secondary: 220 30% 18%;
+    --secondary-foreground: 220 20% 95%;
+
+    --muted: 220 30% 18%;
+    --muted-foreground: 220 15% 65%;
+
+    /* Accent = sky/ciano, dá contraste sobre o azul-primary. */
+    --accent: 199 89% 60%;
+    --accent-foreground: 0 0% 100%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --critical: 0 84% 60%;
+    --critical-foreground: 0 0% 100%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 30% 18%;
+    --input: 220 30% 18%;
+    --ring: 217 91% 60%;
+
+    --sidebar-background: 220 45% 8%;
+    --sidebar-foreground: 220 20% 95%;
+    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 35% 12%;
+    --sidebar-accent-foreground: 220 20% 95%;
+    --sidebar-border: 220 30% 18%;
+    --sidebar-ring: 217 91% 60%;
+  }
+
+  .whatsapp {
+    --background: 0 0% 100%;
+    --foreground: 192 30% 20%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 192 30% 20%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 192 30% 20%;
+
+   --primary: 142 55% 28%;
+    --primary-light: 142 55% 36%;
+    --primary-dark: 142 55% 22%;
+
+    --secondary: 142 20% 90%;
+    --secondary-foreground: 142 30% 20%;
+
+    --muted: 142 15% 96%;
+    --muted-foreground: 142 10% 50%;
+
+    --accent: 142 70% 35%;
+    --accent-foreground: 0 0% 100%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    
+    --critical: 0 84% 60%;
+    --critical-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 142 20% 85%;
+    --input: 142 20% 85%;
+    --ring: 142 70% 35%;
+    
+    --sidebar-background: 142 70% 35%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 0 0% 100%;
+    --sidebar-primary-foreground: 142 70% 35%;
+    --sidebar-accent: 142 60% 40%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 142 60% 30%;
+    --sidebar-ring: 0 0% 100%;
+  }
+
+  .whatsapp.dark {
+    --background: 192 30% 8%;
+    --foreground: 142 20% 95%;
+
+    --card: 192 25% 12%;
+    --card-foreground: 142 20% 95%;
+
+    --popover: 192 25% 12%;
+    --popover-foreground: 142 20% 95%;
+
+    --primary: 142 70% 45%;
+    --primary-foreground: 0 0% 100%;
+    --primary-light: 142 70% 55%;
+    --primary-dark: 142 70% 35%;
+
+    --secondary: 192 20% 18%;
+    --secondary-foreground: 142 20% 95%;
+
+    --muted: 192 20% 18%;
+    --muted-foreground: 142 15% 65%;
+
+    --accent: 142 70% 45%;
+    --accent-foreground: 0 0% 100%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    
+    --critical: 0 84% 60%;
+    --critical-foreground: 0 0% 100%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 192 20% 18%;
+    --input: 192 20% 18%;
+    --ring: 142 70% 45%;
+    
+    --sidebar-background: 192 30% 8%;
+    --sidebar-foreground: 142 20% 95%;
+    --sidebar-primary: 142 70% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 192 25% 12%;
+    --sidebar-accent-foreground: 142 20% 95%;
+    --sidebar-border: 192 20% 18%;
+    --sidebar-ring: 142 70% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+/* =========================================================
+   AUDIO WAVEFORM (CHAT)
+========================================================= */
+
+@keyframes wave {
+  0% {
+    transform: scaleY(0.4);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+  100% {
+    transform: scaleY(0.4);
+  }
+}
+
+.animate-wave {
+  animation: wave 1.2s ease-in-out infinite;
+}
+
+/* =========================================================
+   NOTIFICAÇÃO (PISCA VERMELHO ENQUANTO NÃO LIDA)
+   - Use a classe: .notif-blink-red
+========================================================= */
+
+@keyframes notifBlinkRed {
+  0%, 100% {
+    box-shadow: 0 0 0 2px hsl(var(--critical) / 0.55);
+    background-color: hsl(var(--critical) / 0.08);
+  }
+  50% {
+    box-shadow: 0 0 0 2px hsl(var(--critical) / 0);
+    background-color: transparent;
+  }
+}
+
+.notif-blink-red {
+  animation: notifBlinkRed 1s linear infinite;
+  border-color: hsl(var(--critical) / 0.6) !important;
+}
+

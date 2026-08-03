@@ -1,0 +1,45 @@
+# Dependências (serão instaladas dentro do container)
+node_modules
+.npm
+.pnpm-store
+
+# Build local
+dist
+dist-ssr
+.vite
+
+# Variáveis de ambiente (devem vir como build args do EasyPanel)
+.env
+.env.*
+!.env.example
+
+# Git e CI
+.git
+.github
+.gitignore
+.gitattributes
+
+# IDE / sistema
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+
+# Supabase local (não precisa no build do app)
+supabase/.branches
+supabase/.temp
+
+# Docs / extras (não afeta build, deixa imagem mais leve)
+README.md
+docs
+src/docs
+
+# Container files que não devem se incluir
+Dockerfile
+.dockerignore
+
+# Outros
+*.zip
+*.bak

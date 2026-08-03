@@ -1,0 +1,137 @@
+{
+  "name": "Delvor — Upload Arquivo (MinIO)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "infnity-upload-image",
+        "responseMode": "responseNode",
+        "options": { "rawBody": false }
+      },
+      "id": "c0a80101-0001-4001-8001-000000000001",
+      "name": "Webhook POST",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "infnity-upload-image-post"
+    },
+    {
+      "parameters": {
+        "httpMethod": "OPTIONS",
+        "path": "infnity-upload-image",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "c0a80101-0002-4001-8001-000000000002",
+      "name": "Webhook OPTIONS (CORS)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 240],
+      "webhookId": "infnity-upload-image-options"
+    },
+    {
+      "parameters": {
+        "respondWith": "noData",
+        "options": {
+          "responseCode": 204,
+          "responseHeaders": {
+            "entries": [
+              { "name": "Access-Control-Allow-Origin", "value": "*" },
+              { "name": "Access-Control-Allow-Methods", "value": "POST, OPTIONS" },
+              { "name": "Access-Control-Allow-Headers", "value": "Content-Type" },
+              { "name": "Access-Control-Max-Age", "value": "86400" }
+            ]
+          }
+        }
+      },
+      "id": "c0a80101-0003-4001-8001-000000000003",
+      "name": "Respond Preflight",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [224, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aceita $json.body (webhook v2) ou $json (parsed direto)\nconst raw = $input.first().json;\nconst body = (raw.body && typeof raw.body === 'object') ? raw.body : raw;\n\nconst { filename, mime, data } = body;\n\nif (!data || !mime) {\n  throw new Error(`Campos obrigatorios faltando. Recebido: ${JSON.stringify(Object.keys(body || {}))}`);\n}\n\nconst allowedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml', 'application/pdf'];\nif (!allowedMimes.includes(mime.toLowerCase())) {\n  throw new Error(`Tipo nao permitido: ${mime}. Use JPEG, PNG, WebP, GIF, SVG ou PDF.`);\n}\n\nconst buffer = Buffer.from(data, 'base64');\nconst sizeKB = buffer.length / 1024;\nif (sizeKB > 10000) {\n  throw new Error(`Arquivo muito grande: ${sizeKB.toFixed(0)} KB (max 10 MB)`);\n}\n\nconst m = mime.toLowerCase();\nconst ext = m.includes('png') ? 'png'\n          : m.includes('webp') ? 'webp'\n          : m.includes('gif') ? 'gif'\n          : m.includes('svg') ? 'svg'\n          : m.includes('pdf') ? 'pdf'\n          : 'jpg';\nconst safeName = (filename || 'file').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 30) || 'file';\nconst key = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName}.${ext}`;\n\nreturn [{\n  json: { key, mime, size: buffer.length, sizeKB: Math.round(sizeKB) },\n  binary: { file: { data, mimeType: mime, fileName: key, fileExtension: ext } }\n}];"
+      },
+      "id": "c0a80101-0004-4001-8001-000000000004",
+      "name": "Validar & Preparar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [224, 0]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=http://typebot-minio:9000/services.infnity/{{ $json.key }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "=={{ $json.mime }}" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "file",
+        "options": { "timeout": 30000 }
+      },
+      "id": "c0a80101-0005-4001-8001-000000000005",
+      "name": "MinIO PUT",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [432, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Monta a URL publica do arquivo\nconst PUBLIC_BASE = 'https://files.zapcompany.com.br/services.infnity';\nconst meta = $('Validar & Preparar').first().json;\n\nreturn [{\n  json: {\n    success: true,\n    url: `${PUBLIC_BASE}/${meta.key}`,\n    key: meta.key,\n    size: meta.size,\n    sizeKB: meta.sizeKB,\n    mime: meta.mime\n  }\n}];"
+      },
+      "id": "c0a80101-0006-4001-8001-000000000006",
+      "name": "Formatar Resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [672, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              { "name": "Access-Control-Allow-Origin", "value": "*" },
+              { "name": "Access-Control-Allow-Methods", "value": "POST, OPTIONS" },
+              { "name": "Access-Control-Allow-Headers", "value": "Content-Type" },
+              { "name": "Cache-Control", "value": "no-store" }
+            ]
+          }
+        }
+      },
+      "id": "c0a80101-0007-4001-8001-000000000007",
+      "name": "Respond Sucesso",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [880, 0]
+    }
+  ],
+  "connections": {
+    "Webhook POST": {
+      "main": [[{ "node": "Validar & Preparar", "type": "main", "index": 0 }]]
+    },
+    "Validar & Preparar": {
+      "main": [[{ "node": "MinIO PUT", "type": "main", "index": 0 }]]
+    },
+    "MinIO PUT": {
+      "main": [[{ "node": "Formatar Resposta", "type": "main", "index": 0 }]]
+    },
+    "Formatar Resposta": {
+      "main": [[{ "node": "Respond Sucesso", "type": "main", "index": 0 }]]
+    },
+    "Webhook OPTIONS (CORS)": {
+      "main": [[{ "node": "Respond Preflight", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": { "executionOrder": "v1" },
+  "active": false
+}

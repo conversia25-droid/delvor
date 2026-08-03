@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Delvor — CRM + Ordens de Serviço para TI</title>
+    <meta name="description" content="Sistema integrado de Vendas, Ordens de Serviço, Estoque e Atendimento via WhatsApp para assistência técnica, locação e venda de impressoras, suprimentos e periféricos." />
+    <meta name="keywords" content="ordem de serviço, OS, CRM, impressoras, suprimentos, periféricos, estoque, WhatsApp, assistência técnica" />
+    <meta name="author" content="Delvor" />
+    <meta name="robots" content="index, follow" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Delvor — CRM + Ordens de Serviço" />
+    <meta property="og:description" content="Vendas, OS, Estoque e WhatsApp em uma única plataforma para serviços de tecnologia." />
+    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:site_name" content="Delvor" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Delvor — CRM + Ordens de Serviço" />
+    <meta name="twitter:description" content="Vendas, OS, Estoque e WhatsApp em uma única plataforma para serviços de tecnologia." />
+    <meta name="twitter:image" content="/og-image.png" />
+
+    <meta name="theme-color" content="#1e3a8a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Delvor" />
+
+    <!-- Favicons + Apple touch icon (gerados por `npm run icons`) -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+
+    <!-- Fonte da marca (Space Grotesk) — usada só pelo BrandLogo. Preload
+         pra evitar flash com fallback quando a logo aparece no login/sidebar. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <!-- Runtime env: gerado pelo docker-entrypoint.sh em produção,
+         em dev fica com os placeholders literais (cliente Supabase
+         cai pro fallback de import.meta.env). -->
+    <script src="/env.js"></script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

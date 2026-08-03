@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Source do mark do Delvor. Usado pelo generate-pwa-icons.mjs
+     pra gerar favicon, apple-touch-icon, android-chrome, maskable, etc.
+     Mesmo path do <BrandLogo> React component. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <defs>
+    <linearGradient id="dl-body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#93c5fd"/>
+      <stop offset="50%"  stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#172554"/>
+    </linearGradient>
+    <linearGradient id="dl-fold" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#0c1c4a" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#0c1c4a" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- "d" contínuo (bowl + stem) com bowl vazado via evenodd -->
+  <path fill="url(#dl-body)" fill-rule="evenodd"
+        d="M 88 14 Q 96 14 96 22 L 96 68 Q 96 96 66 96 Q 30 96 22 66 Q 16 42 40 30 Q 60 22 74 34 L 74 22 Q 74 14 82 14 Z
+           M 78 46 Q 66 40 54 46 Q 42 54 44 66 Q 46 78 60 80 Q 74 82 78 68 Z"/>
+
+  <!-- Dobra escura onde stem 'passa por trás' do bowl -->
+  <path fill="url(#dl-fold)" d="M 74 46 L 78 46 L 78 68 L 74 68 Z"/>
+
+  <!-- Highlights (topo do stem + arco do bowl) -->
+  <path fill="#dbeafe" opacity="0.55" d="M 76 18 Q 82 14 90 18 L 90 34 L 76 34 Z"/>
+  <path fill="#dbeafe" opacity="0.4"  d="M 24 60 Q 20 40 42 32 Q 60 26 72 34 L 68 42 Q 52 34 40 40 Q 28 46 28 60 Z"/>
+</svg>
