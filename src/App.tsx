@@ -137,17 +137,12 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
 
 
 function MasterProtectedLayout({ children }: { children: React.ReactNode }) {
-  // O painel master é desenhado em tema escuro (bg-slate-950). Garante a classe
-  // .dark no documento — senão componentes de tema (Button "outline", etc.)
-  // saem com fundo claro + texto claro e ficam ilegíveis.
-  useEffect(() => {
-    const root = document.documentElement;
-    const hadDark = root.classList.contains("dark");
-    root.classList.add("dark");
-    return () => { if (!hadDark) root.classList.remove("dark"); };
-  }, []);
+  // O painel master é desenhado em tema escuro (bg-slate-950). Aplicamos .dark
+  // num wrapper local — mexer em document.documentElement briga com o
+  // ThemeContext, que reseta a classe pro tema salvo do usuário em todo
+  // re-render, deixando botões outline com bg claro no fundo dark.
   return (
-    <>
+    <div className="dark">
       <MasterSidebar />
       <main className="ml-16 lg:ml-72 min-h-screen bg-slate-950 text-slate-100 flex flex-col">
         <div className="flex-1 w-full">
@@ -156,7 +151,7 @@ function MasterProtectedLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </main>
-    </>
+    </div>
   );
 }
 
