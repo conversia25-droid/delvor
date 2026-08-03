@@ -585,8 +585,8 @@ function openAgenda(taskId?: string) {
 
       {/* Toast in-app (clicável) para novas mensagens */}
       {/* HEADER */}
-      <div className={`flex h-16 items-center justify-between border-b border-sidebar-border ${lgPx6}`}>
-        <div className="flex items-center gap-2">
+      <div className={`flex h-16 items-center justify-between border-b border-sidebar-border overflow-hidden ${lgPx6}`}>
+        <div className="flex items-center gap-2 min-w-0">
           {/* Mark sempre visível (cabe no sidebar colapsado de 64px). */}
           <BrandLogo variant="mark" size={1.75} />
           {/* Wordmark só quando expandido (some no mobile e no collapsed). */}
