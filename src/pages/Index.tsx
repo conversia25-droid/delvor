@@ -118,7 +118,7 @@ export default function Index() {
                 Começar agora <ArrowRight className="h-4 w-4 ml-1" />
               </Link>
             </Button>
-            <Button asChild size="lg" variant="outline" className="border-white/20 hover:bg-white/5">
+            <Button asChild size="lg" variant="outline" className="border-blue-500/40 bg-transparent text-blue-100 hover:bg-blue-500/10 hover:text-white hover:border-blue-400">
               <a href="#features">Ver recursos</a>
             </Button>
           </div>

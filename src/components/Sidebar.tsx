@@ -586,8 +586,13 @@ function openAgenda(taskId?: string) {
       {/* Toast in-app (clicável) para novas mensagens */}
       {/* HEADER */}
       <div className={`flex h-16 items-center justify-between border-b border-sidebar-border ${lgPx6}`}>
-        <div className="flex items-center gap-3">
-          <BrandLogo size={1.75} />
+        <div className="flex items-center gap-2">
+          {/* Mark sempre visível (cabe no sidebar colapsado de 64px). */}
+          <BrandLogo variant="mark" size={1.75} />
+          {/* Wordmark só quando expandido (some no mobile e no collapsed). */}
+          <span className={lgShowInline}>
+            <BrandLogo variant="wordmark" size={1.75} />
+          </span>
           {isAdmin && (
             <Badge className={`${lgShowIFlex} gap-1`}>
               <ShieldCheck className="h-3 w-3" />
