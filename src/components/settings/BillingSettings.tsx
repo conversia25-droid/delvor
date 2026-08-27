@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { CreditCard, Loader2, RefreshCw, FileText, CheckCircle2 } from "lucide-react";
+import MyAddonsPanel from "@/components/addons/MyAddonsPanel";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -222,6 +223,9 @@ export default function BillingSettings() {
           </div>
         )}
       </div>
+
+      {/* Add-ons — auto-contratação pelo cliente */}
+      <MyAddonsPanel />
     </div>
   );
 }

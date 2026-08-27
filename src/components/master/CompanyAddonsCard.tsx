@@ -20,20 +20,12 @@ interface Row {
   activated_at: string | null;
 }
 
-const CATALOG: Array<{
+interface CatalogItem {
   code: string;
   name: string;
-  description: string;
+  description: string | null;
   defaultPriceCents: number;
-}> = [
-  {
-    code: "financeiro",
-    name: "Financeiro",
-    description:
-      "Fluxo de caixa, despesas fixas, margem de produtos e calculadora de precificação.",
-    defaultPriceCents: 9700,
-  },
-];
+}
 
 function formatMoney(cents: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
@@ -41,6 +33,7 @@ function formatMoney(cents: number) {
 
 export default function CompanyAddonsCard({ companyId }: Props) {
   const { toast } = useToast();
+  const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
@@ -48,15 +41,28 @@ export default function CompanyAddonsCard({ companyId }: Props) {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("company_addons")
-      .select("id, addon_code, active, monthly_price_cents, activated_at")
-      .eq("company_id", companyId);
-    if (error) {
-      toast({ title: "Erro ao carregar add-ons", description: error.message, variant: "destructive" });
-      setRows([]);
+    const [catRes, rowsRes] = await Promise.all([
+      supabase.from("addon_catalog")
+        .select("code, name, description, default_price_cents")
+        .eq("active", true)
+        .order("name"),
+      supabase.from("company_addons")
+        .select("id, addon_code, active, monthly_price_cents, activated_at")
+        .eq("company_id", companyId),
+    ]);
+    if (catRes.error || rowsRes.error) {
+      toast({
+        title: "Erro ao carregar add-ons",
+        description: catRes.error?.message || rowsRes.error?.message,
+        variant: "destructive",
+      });
+      setCatalog([]); setRows([]);
     } else {
-      setRows((data as Row[]) ?? []);
+      setCatalog(((catRes.data as any[]) ?? []).map((c) => ({
+        code: c.code, name: c.name, description: c.description,
+        defaultPriceCents: c.default_price_cents,
+      })));
+      setRows((rowsRes.data as Row[]) ?? []);
     }
     setLoading(false);
   }, [companyId, toast]);
@@ -71,13 +77,13 @@ export default function CompanyAddonsCard({ companyId }: Props) {
 
   async function toggle(code: string, next: boolean) {
     setSaving(code);
-    const catalog = CATALOG.find((c) => c.code === code);
+    const catalogItem = catalog.find((c) => c.code === code);
     const existing = rowByCode.get(code);
     const priceInputRaw = priceDraft[code];
     const priceInputCents = priceInputRaw ? Math.round(Number(priceInputRaw.replace(",", ".")) * 100) : NaN;
     const priceCents = Number.isFinite(priceInputCents)
       ? priceInputCents
-      : existing?.monthly_price_cents ?? catalog?.defaultPriceCents ?? 0;
+      : existing?.monthly_price_cents ?? catalogItem?.defaultPriceCents ?? 0;
 
     const payload = {
       company_id: companyId,
@@ -146,9 +152,11 @@ export default function CompanyAddonsCard({ companyId }: Props) {
           <div className="flex items-center gap-2 text-sm text-slate-400">
             <Loader2 className="h-4 w-4 animate-spin" /> Carregando...
           </div>
+        ) : catalog.length === 0 ? (
+          <p className="text-sm text-slate-400">Nenhum add-on cadastrado no catálogo.</p>
         ) : (
           <div className="space-y-4">
-            {CATALOG.map((addon) => {
+            {catalog.map((addon) => {
               const row = rowByCode.get(addon.code);
               const active = !!row?.active;
               const currentPrice = row?.monthly_price_cents ?? addon.defaultPriceCents;
