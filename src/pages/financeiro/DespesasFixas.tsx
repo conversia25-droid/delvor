@@ -105,9 +105,9 @@ export default function FinanceiroFixas() {
         .eq("company_id", user.company_id)
         .eq("month_ref", monthRef),
       supabase.from("profiles")
-        .select("id, name")
+        .select("id, name:nome")
         .eq("company_id", user.company_id)
-        .order("name", { ascending: true }),
+        .order("nome", { ascending: true }),
     ]);
     if (fixasRes.error || catsRes.error || paysRes.error || peopleRes.error) {
       toast({

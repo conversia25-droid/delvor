@@ -86,9 +86,9 @@ export default function FinanceiroVariaveis() {
         .eq("kind", "despesa")
         .order("name", { ascending: true }),
       supabase.from("profiles")
-        .select("id, name")
+        .select("id, name:nome")
         .eq("company_id", user.company_id)
-        .order("name", { ascending: true }),
+        .order("nome", { ascending: true }),
     ]);
     if (rowsRes.error || catsRes.error || peopleRes.error) {
       toast({
