@@ -22,9 +22,13 @@ export function usePermissions() {
   const isGerente     = hasRole("gerente");
   const isVendedor    = hasRole("vendedor") || hasRole("user");
   const isTecnico     = hasRole("tecnico");
+  const isFinanceiro  = hasRole("financeiro");
 
   /** admin OU gerente — quem tem visão completa da empresa */
   const isManager = isAdmin || isGerente;
+
+  /** admin, gerente OU financeiro — quem pode operar o add-on financeiro */
+  const hasFinancialAccess = isManager || isFinanceiro;
 
   /**
    * "Técnico puro" — só tem o papel de técnico, sem vendedor/admin/gerente.
@@ -41,7 +45,9 @@ export function usePermissions() {
     isGerente,
     isVendedor,
     isTecnico,
+    isFinanceiro,
     isManager,
+    hasFinancialAccess,
     isPureTechnician,
     canSeePricing,
 

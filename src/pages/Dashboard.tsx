@@ -34,6 +34,7 @@ import TopProducts from "@/components/dashboard/TopProducts";
 import TopSellers from "@/components/dashboard/TopSellers";
 import CriticalOsList from "@/components/dashboard/CriticalOsList";
 import LowStockList from "@/components/dashboard/LowStockList";
+import FinanceiroDashboardCard from "@/components/dashboard/FinanceiroDashboardCard";
 
 import type { Product, Sale, SaleItem, SaleStatus, ServiceOrder } from "@/types/delvor";
 import { SALE_STATUS_LABELS } from "@/types/delvor";
@@ -632,8 +633,9 @@ export default function Dashboard() {
         <TopSellers items={topSellers} />
       </div>
 
-      {/* Linha 3: OS críticas + Estoque crítico */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Linha 3: Financeiro (só admin/financeiro) + OS críticas + Estoque crítico */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <FinanceiroDashboardCard />
         <CriticalOsList serviceOrders={serviceOrders} />
         <LowStockList products={products} />
       </div>

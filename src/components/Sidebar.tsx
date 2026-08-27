@@ -54,7 +54,7 @@ import { useAddon } from "@/hooks/useAddon";
  * Itens "Em breve": Agenda, Relatórios — ainda não foram refeitos pra Delvor.
  */
 const navigation = [
-  { name: "Dashboard",    href: "/dashboard",      icon: Home,         roles: ["admin", "gerente", "vendedor", "tecnico", "user"] },
+  { name: "Dashboard",    href: "/dashboard",      icon: Home,         roles: ["admin", "gerente", "vendedor", "tecnico", "user", "financeiro"] },
   { name: "Clientes",     href: "/customers",      icon: Building2,    roles: ["admin", "gerente", "vendedor", "tecnico", "user"] },
   { name: "Chat",         href: "/chat",           icon: MessageSquare, isChat: true, roles: ["admin", "gerente", "vendedor", "user"] },
   { name: "OS",           href: "/service-orders", icon: Wrench,       roles: ["admin", "gerente", "vendedor", "tecnico", "user"] },
@@ -66,9 +66,9 @@ const navigation = [
   { name: "Catálogo",     href: "/services",       icon: Tags,         roles: ["admin", "gerente"] },
   { name: "Fornecedores", href: "/suppliers",      icon: Truck,        roles: ["admin", "gerente"] },
   { name: "Compras",      href: "/purchases",      icon: PackageOpen,  roles: ["admin", "gerente"] },
-  { name: "Contas fixas",   href: "/financeiro/fixas",      icon: CalendarClock, addonCode: "financeiro", roles: ["admin", "gerente"] },
-  { name: "Contas variáveis", href: "/financeiro/variaveis", icon: Receipt,      addonCode: "financeiro", roles: ["admin", "gerente"] },
-  { name: "Categorias fin.",href: "/financeiro/categorias", icon: Tags,          addonCode: "financeiro", roles: ["admin", "gerente"] },
+  { name: "Contas fixas",   href: "/financeiro/fixas",      icon: CalendarClock, addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
+  { name: "Contas variáveis", href: "/financeiro/variaveis", icon: Receipt,      addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
+  { name: "Categorias fin.",href: "/financeiro/categorias", icon: Tags,          addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
   { name: "Relatórios",   href: "/reports",        icon: BarChart3,    roles: ["admin", "gerente"] },
   { name: "Equipe",       href: "/team",           icon: Users,        roles: ["admin"] },
   { name: "Configurações",href: "/settings",       icon: Settings,     roles: ["admin"] },

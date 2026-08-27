@@ -28,10 +28,12 @@ interface Fixed {
   amount_cents: number;
   due_day: number;
   category_id: string | null;
+  linked_user_id: string | null;
   active: boolean;
   notes: string | null;
 }
 interface Category { id: string; name: string; }
+interface Person { id: string; name: string; }
 interface Payment {
   id: string;
   fixed_expense_id: string;
@@ -69,6 +71,7 @@ export default function FinanceiroFixas() {
   const [fixas, setFixas] = useState<Fixed[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [people, setPeople] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Dialog state
@@ -78,6 +81,7 @@ export default function FinanceiroFixas() {
   const [amountDraft, setAmountDraft] = useState(0);
   const [dueDayDraft, setDueDayDraft] = useState(5);
   const [categoryDraft, setCategoryDraft] = useState<string | null>(null);
+  const [linkedUserDraft, setLinkedUserDraft] = useState<string | null>(null);
   const [activeDraft, setActiveDraft] = useState(true);
   const [notesDraft, setNotesDraft] = useState("");
   const [saving, setSaving] = useState(false);
@@ -86,9 +90,9 @@ export default function FinanceiroFixas() {
   const load = useCallback(async () => {
     if (!user?.company_id) return;
     setLoading(true);
-    const [fixasRes, catsRes, paysRes] = await Promise.all([
+    const [fixasRes, catsRes, paysRes, peopleRes] = await Promise.all([
       supabase.from("fixed_expenses")
-        .select("id, name, amount_cents, due_day, category_id, active, notes")
+        .select("id, name, amount_cents, due_day, category_id, linked_user_id, active, notes")
         .eq("company_id", user.company_id)
         .order("name", { ascending: true }),
       supabase.from("expense_categories")
@@ -100,17 +104,22 @@ export default function FinanceiroFixas() {
         .select("id, fixed_expense_id, month_ref, paid_on, amount_cents")
         .eq("company_id", user.company_id)
         .eq("month_ref", monthRef),
+      supabase.from("profiles")
+        .select("id, name")
+        .eq("company_id", user.company_id)
+        .order("name", { ascending: true }),
     ]);
-    if (fixasRes.error || catsRes.error || paysRes.error) {
+    if (fixasRes.error || catsRes.error || paysRes.error || peopleRes.error) {
       toast({
         title: "Erro ao carregar",
-        description: fixasRes.error?.message || catsRes.error?.message || paysRes.error?.message,
+        description: fixasRes.error?.message || catsRes.error?.message || paysRes.error?.message || peopleRes.error?.message,
         variant: "destructive",
       });
     } else {
       setFixas((fixasRes.data as Fixed[]) ?? []);
       setCategories((catsRes.data as Category[]) ?? []);
       setPayments((paysRes.data as Payment[]) ?? []);
+      setPeople((peopleRes.data as Person[]) ?? []);
     }
     setLoading(false);
   }, [user?.company_id, monthRef, toast]);
@@ -128,6 +137,12 @@ export default function FinanceiroFixas() {
     categories.forEach((c) => m.set(c.id, c.name));
     return m;
   }, [categories]);
+
+  const personById = useMemo(() => {
+    const m = new Map<string, string>();
+    people.forEach((p) => m.set(p.id, p.name));
+    return m;
+  }, [people]);
 
   const totalActive = useMemo(
     () => fixas.filter((f) => f.active).reduce((s, f) => s + f.amount_cents, 0),
@@ -149,6 +164,7 @@ export default function FinanceiroFixas() {
     setAmountDraft(0);
     setDueDayDraft(5);
     setCategoryDraft(null);
+    setLinkedUserDraft(null);
     setActiveDraft(true);
     setNotesDraft("");
     setDialogOpen(true);
@@ -159,6 +175,7 @@ export default function FinanceiroFixas() {
     setAmountDraft(row.amount_cents / 100);
     setDueDayDraft(row.due_day);
     setCategoryDraft(row.category_id);
+    setLinkedUserDraft(row.linked_user_id);
     setActiveDraft(row.active);
     setNotesDraft(row.notes ?? "");
     setDialogOpen(true);
@@ -177,13 +194,15 @@ export default function FinanceiroFixas() {
       amount_cents: Math.round(amountDraft * 100),
       due_day: dueDayDraft,
       category_id: categoryDraft,
+      linked_user_id: linkedUserDraft,
       active: activeDraft,
       notes: notesDraft.trim() || null,
     };
     const { error } = editing
       ? await supabase.from("fixed_expenses").update({
           name: payload.name, amount_cents: payload.amount_cents, due_day: payload.due_day,
-          category_id: payload.category_id, active: payload.active, notes: payload.notes,
+          category_id: payload.category_id, linked_user_id: payload.linked_user_id,
+          active: payload.active, notes: payload.notes,
         }).eq("id", editing.id)
       : await supabase.from("fixed_expenses").insert(payload as any);
 
@@ -329,6 +348,24 @@ export default function FinanceiroFixas() {
                   </Select>
                 </div>
                 <div>
+                  <Label>Vincular a colaborador <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+                  <Select
+                    value={linkedUserDraft ?? "__none__"}
+                    onValueChange={(v) => setLinkedUserDraft(v === "__none__" ? null : v)}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Ninguém" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Ninguém</SelectItem>
+                      {people.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Útil pra salário, pró-labore, plano de saúde por pessoa.
+                  </p>
+                </div>
+                <div>
                   <Label>Observações</Label>
                   <Input value={notesDraft} onChange={(e) => setNotesDraft(e.target.value)} placeholder="Opcional" />
                 </div>
@@ -401,7 +438,14 @@ export default function FinanceiroFixas() {
                   const isProc = processing === row.id || processing === st.pay?.id;
                   return (
                     <TableRow key={row.id} className={row.active ? "" : "opacity-50"}>
-                      <TableCell className="font-medium">{row.name}</TableCell>
+                      <TableCell className="font-medium">
+                        {row.name}
+                        {row.linked_user_id && (
+                          <span className="ml-2 text-xs text-blue-500">
+                            👤 {personById.get(row.linked_user_id) ?? "—"}
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-muted-foreground">
                         {row.category_id ? catByFixed.get(row.category_id) ?? "—" : "—"}
                       </TableCell>

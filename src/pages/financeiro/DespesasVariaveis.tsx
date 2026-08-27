@@ -24,9 +24,11 @@ interface Variable {
   amount_cents: number;
   paid_on: string;
   category_id: string | null;
+  linked_user_id: string | null;
   notes: string | null;
 }
 interface Category { id: string; name: string; }
+interface Person { id: string; name: string; }
 
 function formatMoney(cents: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
@@ -54,6 +56,7 @@ export default function FinanceiroVariaveis() {
 
   const [rows, setRows] = useState<Variable[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [people, setPeople] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Dialog
@@ -63,15 +66,16 @@ export default function FinanceiroVariaveis() {
   const [amountDraft, setAmountDraft] = useState(0);
   const [paidOnDraft, setPaidOnDraft] = useState(todayISO());
   const [categoryDraft, setCategoryDraft] = useState<string | null>(null);
+  const [linkedUserDraft, setLinkedUserDraft] = useState<string | null>(null);
   const [notesDraft, setNotesDraft] = useState("");
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     if (!user?.company_id) return;
     setLoading(true);
-    const [rowsRes, catsRes] = await Promise.all([
+    const [rowsRes, catsRes, peopleRes] = await Promise.all([
       supabase.from("variable_expenses")
-        .select("id, name, amount_cents, paid_on, category_id, notes")
+        .select("id, name, amount_cents, paid_on, category_id, linked_user_id, notes")
         .eq("company_id", user.company_id)
         .gte("paid_on", from)
         .lte("paid_on", to)
@@ -81,16 +85,21 @@ export default function FinanceiroVariaveis() {
         .eq("company_id", user.company_id)
         .eq("kind", "despesa")
         .order("name", { ascending: true }),
+      supabase.from("profiles")
+        .select("id, name")
+        .eq("company_id", user.company_id)
+        .order("name", { ascending: true }),
     ]);
-    if (rowsRes.error || catsRes.error) {
+    if (rowsRes.error || catsRes.error || peopleRes.error) {
       toast({
         title: "Erro ao carregar",
-        description: rowsRes.error?.message || catsRes.error?.message,
+        description: rowsRes.error?.message || catsRes.error?.message || peopleRes.error?.message,
         variant: "destructive",
       });
     } else {
       setRows((rowsRes.data as Variable[]) ?? []);
       setCategories((catsRes.data as Category[]) ?? []);
+      setPeople((peopleRes.data as Person[]) ?? []);
     }
     setLoading(false);
   }, [user?.company_id, from, to, toast]);
@@ -102,6 +111,12 @@ export default function FinanceiroVariaveis() {
     categories.forEach((c) => m.set(c.id, c.name));
     return m;
   }, [categories]);
+
+  const personById = useMemo(() => {
+    const m = new Map<string, string>();
+    people.forEach((p) => m.set(p.id, p.name));
+    return m;
+  }, [people]);
 
   const total = useMemo(() => rows.reduce((s, r) => s + r.amount_cents, 0), [rows]);
 
@@ -116,6 +131,7 @@ export default function FinanceiroVariaveis() {
     setAmountDraft(0);
     setPaidOnDraft(todayISO());
     setCategoryDraft(null);
+    setLinkedUserDraft(null);
     setNotesDraft("");
     setDialogOpen(true);
   }
@@ -125,6 +141,7 @@ export default function FinanceiroVariaveis() {
     setAmountDraft(row.amount_cents / 100);
     setPaidOnDraft(row.paid_on);
     setCategoryDraft(row.category_id);
+    setLinkedUserDraft(row.linked_user_id);
     setNotesDraft(row.notes ?? "");
     setDialogOpen(true);
   }
@@ -141,12 +158,14 @@ export default function FinanceiroVariaveis() {
       amount_cents: Math.round(amountDraft * 100),
       paid_on: paidOnDraft,
       category_id: categoryDraft,
+      linked_user_id: linkedUserDraft,
       notes: notesDraft.trim() || null,
     };
     const { error } = editing
       ? await supabase.from("variable_expenses").update({
           name: payload.name, amount_cents: payload.amount_cents, paid_on: payload.paid_on,
-          category_id: payload.category_id, notes: payload.notes,
+          category_id: payload.category_id, linked_user_id: payload.linked_user_id,
+          notes: payload.notes,
         }).eq("id", editing.id)
       : await supabase.from("variable_expenses").insert(payload as any);
 
@@ -222,6 +241,21 @@ export default function FinanceiroVariaveis() {
                 </Select>
               </div>
               <div>
+                <Label>Vincular a colaborador <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+                <Select
+                  value={linkedUserDraft ?? "__none__"}
+                  onValueChange={(v) => setLinkedUserDraft(v === "__none__" ? null : v)}
+                >
+                  <SelectTrigger><SelectValue placeholder="Ninguém" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Ninguém</SelectItem>
+                    {people.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <Label>Observações</Label>
                 <Input value={notesDraft} onChange={(e) => setNotesDraft(e.target.value)} placeholder="Opcional" />
               </div>
@@ -287,7 +321,14 @@ export default function FinanceiroVariaveis() {
                 rows.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell className="text-muted-foreground">{formatBR(row.paid_on)}</TableCell>
-                    <TableCell className="font-medium">{row.name}</TableCell>
+                    <TableCell className="font-medium">
+                      {row.name}
+                      {row.linked_user_id && (
+                        <span className="ml-2 text-xs text-blue-500">
+                          👤 {personById.get(row.linked_user_id) ?? "—"}
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">
                       {row.category_id ? catByRow.get(row.category_id) ?? "—" : "—"}
                     </TableCell>
