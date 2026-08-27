@@ -50,6 +50,9 @@ const TrackOrder = lazy(() => import("./pages/TrackOrder"));
 const Help = lazy(() => import("./pages/Help"));
 const Support = lazy(() => import("./pages/Support"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const FinanceiroCategorias = lazy(() => import("./pages/financeiro/Categorias"));
+const FinanceiroFixas = lazy(() => import("./pages/financeiro/DespesasFixas"));
+const FinanceiroVariaveis = lazy(() => import("./pages/financeiro/DespesasVariaveis"));
 const MasterLogin = lazy(() => import("./pages/master/MasterLogin"));
 const MasterDashboard = lazy(() => import("./pages/master/MasterDashboard"));
 const MasterAnnouncements = lazy(() => import("./pages/master/MasterAnnouncements"));
@@ -505,6 +508,12 @@ function AppContent() {
           <Route path="/rentals" element={<ProtectedRoute><ProtectedLayout><Rentals /></ProtectedLayout></ProtectedRoute>} />
           <Route path="/rentals/new" element={<ProtectedRoute><ProtectedLayout><RentalEditor /></ProtectedLayout></ProtectedRoute>} />
           <Route path="/rentals/:id" element={<ProtectedRoute><ProtectedLayout><RentalEditor /></ProtectedLayout></ProtectedRoute>} />
+          {/* --- ADD-ON FINANCEIRO --- */}
+          <Route path="/financeiro" element={<Navigate to="/financeiro/fixas" replace />} />
+          <Route path="/financeiro/categorias" element={<ProtectedRoute><ProtectedLayout><FinanceiroCategorias /></ProtectedLayout></ProtectedRoute>} />
+          <Route path="/financeiro/fixas" element={<ProtectedRoute><ProtectedLayout><FinanceiroFixas /></ProtectedLayout></ProtectedRoute>} />
+          <Route path="/financeiro/variaveis" element={<ProtectedRoute><ProtectedLayout><FinanceiroVariaveis /></ProtectedLayout></ProtectedRoute>} />
+
           {/* Redirect do /agenda legado pra /schedule */}
           <Route path="/agenda" element={<Navigate to="/schedule" replace />} />
           <Route path="/agenda/calendario" element={<Navigate to="/schedule" replace />} />

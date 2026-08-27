@@ -26,6 +26,8 @@ import {
   Wallet,
   BarChart3,
   FileText,
+  CalendarClock,
+  Receipt,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink } from "./NavLink";
@@ -37,6 +39,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useOnboarding } from "@/contexts/OnboardingContext";
 import { useSidebarCollapsed } from "@/hooks/useSidebarCollapsed";
+import { useAddon } from "@/hooks/useAddon";
 
 /* =========================================================
    NAVIGATION COM CONTROLE DE PAPEL
@@ -63,6 +66,9 @@ const navigation = [
   { name: "Catálogo",     href: "/services",       icon: Tags,         roles: ["admin", "gerente"] },
   { name: "Fornecedores", href: "/suppliers",      icon: Truck,        roles: ["admin", "gerente"] },
   { name: "Compras",      href: "/purchases",      icon: PackageOpen,  roles: ["admin", "gerente"] },
+  { name: "Contas fixas",   href: "/financeiro/fixas",      icon: CalendarClock, addonCode: "financeiro", roles: ["admin", "gerente"] },
+  { name: "Contas variáveis", href: "/financeiro/variaveis", icon: Receipt,      addonCode: "financeiro", roles: ["admin", "gerente"] },
+  { name: "Categorias fin.",href: "/financeiro/categorias", icon: Tags,          addonCode: "financeiro", roles: ["admin", "gerente"] },
   { name: "Relatórios",   href: "/reports",        icon: BarChart3,    roles: ["admin", "gerente"] },
   { name: "Equipe",       href: "/team",           icon: Users,        roles: ["admin"] },
   { name: "Configurações",href: "/settings",       icon: Settings,     roles: ["admin"] },
@@ -460,10 +466,13 @@ useEffect(() => {
   /* =========================================================
      FILTRO DE MENU POR PAPEL
   ========================================================= */
+  const financeiroAddon = useAddon("financeiro");
   const filteredNavigation = navigation.filter((item) => {
     if (!item.roles.some((role) => hasRole(role))) return false;
     // Esconder TV Wallboard para planos Starter e Pro
     if (item.href === "/tv/wallboard" && (planCode === "starter" || planCode === "pro")) return false;
+    // Esconder itens de add-on quando o add-on não está ativo pra empresa
+    if ((item as any).addonCode === "financeiro" && !financeiroAddon.active) return false;
     return true;
   });
 

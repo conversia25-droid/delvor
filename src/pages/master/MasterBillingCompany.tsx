@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import CompanyAddonsCard from "@/components/master/CompanyAddonsCard";
 
 interface CompanyRow {
   id: string;
@@ -450,6 +451,9 @@ export default function MasterBillingCompany() {
         <Card className="border-slate-800 bg-slate-900 text-slate-100"><CardHeader><CardTitle className="text-base flex items-center gap-2"><CalendarClock className="h-4 w-4 text-blue-300" /> Próximo vencimento</CardTitle></CardHeader><CardContent><p className="text-2xl font-semibold">{(() => { const d = subscription?.current_period_end || summary?.current_period_end; const s = String(subscription?.status || summary?.subscription_status || "").toLowerCase(); if (d) return formatDate(d); if (s === "active") return "Ilimitado"; return "—"; })()}</p></CardContent></Card>
         <Card className="border-slate-800 bg-slate-900 text-slate-100"><CardHeader><CardTitle className="text-base flex items-center gap-2"><CreditCard className="h-4 w-4 text-blue-300" /> Mensalidade</CardTitle></CardHeader><CardContent><p className="text-2xl font-semibold">{summary?.monthly_amount_cents ? formatMoney(summary.monthly_amount_cents) : "—"}</p></CardContent></Card>
       </div>
+
+      {/* ADD-ONS */}
+      <CompanyAddonsCard companyId={companyId} />
 
       {/* DADOS DA EMPRESA + ADMINISTRADOR */}
       <div className="grid gap-6 xl:grid-cols-2">
