@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { planIncludesAddon, PLAN_LABEL, type AddonCode } from "@/lib/addons";
 
 interface Props {
   companyId: string;
@@ -35,13 +36,14 @@ export default function CompanyAddonsCard({ companyId }: Props) {
   const { toast } = useToast();
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
+  const [planCode, setPlanCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [priceDraft, setPriceDraft] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [catRes, rowsRes] = await Promise.all([
+    const [catRes, rowsRes, planRes] = await Promise.all([
       supabase.from("addon_catalog")
         .select("code, name, description, default_price_cents")
         .eq("active", true)
@@ -49,7 +51,12 @@ export default function CompanyAddonsCard({ companyId }: Props) {
       supabase.from("company_addons")
         .select("id, addon_code, active, monthly_price_cents, activated_at")
         .eq("company_id", companyId),
+      supabase.from("v_company_billing_summary")
+        .select("plan_code")
+        .eq("company_id", companyId)
+        .maybeSingle(),
     ]);
+    setPlanCode((planRes.data as any)?.plan_code ?? null);
     if (catRes.error || rowsRes.error) {
       toast({
         title: "Erro ao carregar add-ons",
@@ -181,6 +188,11 @@ export default function CompanyAddonsCard({ companyId }: Props) {
                       <p className="mt-2 text-xs text-slate-500">
                         Preço atual: <span className="font-medium text-slate-300">{formatMoney(currentPrice)}</span> / mês
                       </p>
+                      {planIncludesAddon(planCode, addon.code as AddonCode) && (
+                        <p className="mt-1 text-xs text-emerald-400">
+                          Incluso no plano {PLAN_LABEL[planCode!] ?? planCode} — fica ativo independente do switch, sem cobrança separada.
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <Switch

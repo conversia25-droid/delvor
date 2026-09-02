@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Puzzle, Loader2, CheckCircle2, Sparkles, X } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Puzzle, Loader2, CheckCircle2, Sparkles, X, BadgeCheck } from "lucide-react";
 import { db as supabase } from "@/integrations/supabase/untyped";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -7,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import { planIncludesAddon, planThatIncludes, PLAN_LABEL, type AddonCode } from "@/lib/addons";
 
 interface CatalogItem {
   code: string;
@@ -39,6 +41,7 @@ export default function MyAddonsPanel() {
 
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [mine, setMine] = useState<CompanyAddon[]>([]);
+  const [planCode, setPlanCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<string | null>(null);
   const [dialog, setDialog] = useState<{ kind: "activate" | "cancel"; addon: CatalogItem } | null>(null);
@@ -46,7 +49,7 @@ export default function MyAddonsPanel() {
   const load = useCallback(async () => {
     if (!companyId) return;
     setLoading(true);
-    const [catRes, mineRes] = await Promise.all([
+    const [catRes, mineRes, planRes] = await Promise.all([
       supabase.from("addon_catalog")
         .select("code, name, description, default_price_cents, active")
         .eq("active", true)
@@ -54,6 +57,10 @@ export default function MyAddonsPanel() {
       supabase.from("company_addons")
         .select("addon_code, active, monthly_price_cents, activated_at, cancelled_at")
         .eq("company_id", companyId),
+      supabase.from("v_company_billing_summary")
+        .select("plan_code")
+        .eq("company_id", companyId)
+        .maybeSingle(),
     ]);
     if (catRes.error || mineRes.error) {
       toast({
@@ -64,6 +71,7 @@ export default function MyAddonsPanel() {
     } else {
       setCatalog((catRes.data as CatalogItem[]) ?? []);
       setMine((mineRes.data as CompanyAddon[]) ?? []);
+      setPlanCode((planRes.data as any)?.plan_code ?? null);
     }
     setLoading(false);
   }, [companyId, toast]);
@@ -78,14 +86,11 @@ export default function MyAddonsPanel() {
 
   async function confirmActivate(code: string) {
     setProcessing(code);
-    const { error } = await supabase.rpc("activate_addon", { p_code: code } as any);
+    const { error } = await supabase.rpc("activate_addon", { p_code: code });
     if (error) {
       toast({ title: "Erro ao ativar", description: error.message, variant: "destructive" });
     } else {
-      toast({
-        title: "Add-on contratado",
-        description: "Está ativo. O valor entra na sua próxima cobrança.",
-      });
+      toast({ title: "Add-on contratado", description: "Está ativo. O valor entra na sua próxima cobrança." });
       await load();
     }
     setProcessing(null);
@@ -94,22 +99,20 @@ export default function MyAddonsPanel() {
 
   async function confirmCancel(code: string) {
     setProcessing(code);
-    const { error } = await supabase.rpc("deactivate_addon", { p_code: code } as any);
+    const { error } = await supabase.rpc("deactivate_addon", { p_code: code });
     if (error) {
       toast({ title: "Erro ao cancelar", description: error.message, variant: "destructive" });
     } else {
-      toast({
-        title: "Add-on cancelado",
-        description: "Seus dados ficam preservados. Você pode reativar quando quiser.",
-      });
+      toast({ title: "Add-on cancelado", description: "Seus dados ficam preservados. Você pode reativar quando quiser." });
       await load();
     }
     setProcessing(null);
     setDialog(null);
   }
 
-  const activeMine = catalog.filter((c) => mineByCode.get(c.code)?.active);
-  const available = catalog.filter((c) => !mineByCode.get(c.code)?.active);
+  const isIncluded = (c: CatalogItem) => planIncludesAddon(planCode, c.code as AddonCode);
+  const activeMine = catalog.filter((c) => isIncluded(c) || mineByCode.get(c.code)?.active);
+  const available = catalog.filter((c) => !isIncluded(c) && !mineByCode.get(c.code)?.active);
 
   return (
     <>
@@ -128,34 +131,43 @@ export default function MyAddonsPanel() {
             <>
               {activeMine.length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-                    Ativos
-                  </p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Ativos</p>
                   <div className="space-y-2">
                     {activeMine.map((c) => {
-                      const row = mineByCode.get(c.code)!;
+                      const included = isIncluded(c);
+                      const row = mineByCode.get(c.code);
                       return (
                         <div key={c.code} className="rounded-md border p-4 flex items-start justify-between gap-4">
                           <div className="min-w-0">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <p className="font-semibold">{c.name}</p>
-                              <span className="inline-flex items-center gap-1 text-xs text-emerald-500">
-                                <CheckCircle2 className="h-3.5 w-3.5" /> Ativo
-                              </span>
+                              {included ? (
+                                <span className="inline-flex items-center gap-1 text-xs text-emerald-500">
+                                  <BadgeCheck className="h-3.5 w-3.5" /> Incluso no plano {PLAN_LABEL[planCode!] ?? planCode}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-xs text-emerald-500">
+                                  <CheckCircle2 className="h-3.5 w-3.5" /> Ativo
+                                </span>
+                              )}
                             </div>
                             {c.description && <p className="mt-1 text-sm text-muted-foreground">{c.description}</p>}
                             <p className="mt-2 text-xs text-muted-foreground">
-                              {formatMoney(row.monthly_price_cents)} / mês · desde {formatBR(row.activated_at)}
+                              {included
+                                ? "Sem cobrança separada — já faz parte da sua mensalidade."
+                                : `${formatMoney(row?.monthly_price_cents ?? c.default_price_cents)} / mês · desde ${formatBR(row?.activated_at ?? null)}`}
                             </p>
                           </div>
-                          <Button
-                            variant="outline" size="sm"
-                            disabled={processing === c.code}
-                            onClick={() => setDialog({ kind: "cancel", addon: c })}
-                          >
-                            {processing === c.code ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <X className="h-4 w-4 mr-2" />}
-                            Cancelar
-                          </Button>
+                          {!included && (
+                            <Button
+                              variant="outline" size="sm"
+                              disabled={processing === c.code}
+                              onClick={() => setDialog({ kind: "cancel", addon: c })}
+                            >
+                              {processing === c.code ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <X className="h-4 w-4 mr-2" />}
+                              Cancelar
+                            </Button>
+                          )}
                         </div>
                       );
                     })}
@@ -165,27 +177,28 @@ export default function MyAddonsPanel() {
 
               {available.length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-                    Disponíveis
-                  </p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Disponíveis</p>
                   <div className="space-y-2">
                     {available.map((c) => {
                       const wasActive = mineByCode.get(c.code); // já teve algum dia
+                      const bundle = planThatIncludes(c.code as AddonCode);
                       return (
                         <div key={c.code} className="rounded-md border p-4 flex items-start justify-between gap-4">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
                               <p className="font-semibold">{c.name}</p>
                               {wasActive && (
-                                <span className="text-xs text-amber-500">
-                                  cancelado em {formatBR(wasActive.cancelled_at)}
-                                </span>
+                                <span className="text-xs text-amber-500">cancelado em {formatBR(wasActive.cancelled_at)}</span>
                               )}
                             </div>
                             {c.description && <p className="mt-1 text-sm text-muted-foreground">{c.description}</p>}
-                            <p className="mt-2 text-sm font-medium">
-                              {formatMoney(c.default_price_cents)} / mês
-                            </p>
+                            <p className="mt-2 text-sm font-medium">{formatMoney(c.default_price_cents)} / mês</p>
+                            {bundle && (
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Ou migre pro plano <strong>{PLAN_LABEL[bundle] ?? bundle}</strong>, que já inclui —{" "}
+                                <Link to="/support" className="underline">fale com o suporte</Link>.
+                              </p>
+                            )}
                           </div>
                           <Button
                             size="sm"
@@ -203,9 +216,7 @@ export default function MyAddonsPanel() {
               )}
 
               {activeMine.length === 0 && available.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  Nenhum add-on disponível no momento.
-                </p>
+                <p className="text-sm text-muted-foreground text-center py-4">Nenhum add-on disponível no momento.</p>
               )}
             </>
           )}
@@ -216,43 +227,28 @@ export default function MyAddonsPanel() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {dialog?.kind === "activate"
-                ? `Contratar ${dialog.addon.name}?`
-                : `Cancelar ${dialog?.addon.name}?`}
+              {dialog?.kind === "activate" ? `Contratar ${dialog.addon.name}?` : `Cancelar ${dialog?.addon.name}?`}
             </DialogTitle>
             <DialogDescription>
               {dialog?.kind === "activate" ? (
                 <>
-                  <strong>{formatMoney(dialog.addon.default_price_cents)}/mês</strong> serão somados
-                  à sua próxima mensalidade. O add-on fica ativo imediatamente e você pode cancelar
-                  quando quiser.
+                  <strong>{formatMoney(dialog.addon.default_price_cents)}/mês</strong> serão somados à sua próxima
+                  mensalidade. O add-on fica ativo imediatamente e você pode cancelar quando quiser.
                 </>
               ) : (
-                <>
-                  Seus dados ficam preservados. Se contratar de novo, tudo volta como estava.
-                  A cobrança para na próxima fatura.
-                </>
+                <>Seus dados ficam preservados. Se contratar de novo, tudo volta como estava. A cobrança para na próxima fatura.</>
               )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialog(null)} disabled={!!processing}>
-              Voltar
-            </Button>
+            <Button variant="outline" onClick={() => setDialog(null)} disabled={!!processing}>Voltar</Button>
             {dialog?.kind === "activate" ? (
-              <Button
-                onClick={() => void confirmActivate(dialog.addon.code)}
-                disabled={!!processing}
-              >
+              <Button onClick={() => void confirmActivate(dialog.addon.code)} disabled={!!processing}>
                 {processing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                 Confirmar contratação
               </Button>
             ) : dialog ? (
-              <Button
-                variant="destructive"
-                onClick={() => void confirmCancel(dialog.addon.code)}
-                disabled={!!processing}
-              >
+              <Button variant="destructive" onClick={() => void confirmCancel(dialog.addon.code)} disabled={!!processing}>
                 {processing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                 Cancelar add-on
               </Button>

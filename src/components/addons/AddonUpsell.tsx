@@ -1,7 +1,8 @@
+import { Link } from "react-router-dom";
 import { Lock, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import type { AddonCode } from "@/hooks/useAddon";
+import { planThatIncludes, PLAN_LABEL, type AddonCode } from "@/lib/addons";
 
 interface Props {
   code: AddonCode;
@@ -45,22 +46,24 @@ export default function AddonUpsell({ code }: Props) {
 
           <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
             <Button asChild>
-              <a
-                href="https://wa.me/5500000000000?text=Quero%20ativar%20o%20add-on%20Financeiro"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Falar com suporte pra ativar
-              </a>
+              <Link to="/settings?tab=billing">
+                <Sparkles className="h-4 w-4 mr-2" /> Contratar na aba Cobrança
+              </Link>
             </Button>
             <Button variant="outline" asChild>
-              <a href="/dashboard">Voltar</a>
+              <Link to="/dashboard">Voltar</Link>
             </Button>
           </div>
 
-          <p className="mt-6 text-xs text-muted-foreground">
-            Já ativou? Faça logout e login pra atualizar suas permissões.
-          </p>
+          {(() => {
+            const bundle = planThatIncludes(code);
+            return bundle ? (
+              <p className="mt-6 text-xs text-muted-foreground">
+                Ou migre pro plano <strong>{PLAN_LABEL[bundle] ?? bundle}</strong>, que já inclui o {copy.name} —{" "}
+                <Link to="/support" className="underline">fale com o suporte</Link>.
+              </p>
+            ) : null;
+          })()}
         </CardContent>
       </Card>
     </div>

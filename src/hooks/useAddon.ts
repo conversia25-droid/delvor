@@ -1,14 +1,18 @@
 import { useEffect, useState } from "react";
 import { db as supabase } from "@/integrations/supabase/untyped";
 import { useAuth } from "@/contexts/AuthContext";
+import { planIncludesAddon, type AddonCode } from "@/lib/addons";
 
-export type AddonCode = "financeiro";
+export type { AddonCode };
 
 interface AddonState {
   active: boolean;
   loading: boolean;
   monthlyPriceCents: number;
   activatedAt: string | null;
+  /** ativo porque o plano da empresa já inclui (sem cobrança separada) */
+  includedInPlan: boolean;
+  planCode: string | null;
 }
 
 const INITIAL: AddonState = {
@@ -16,11 +20,13 @@ const INITIAL: AddonState = {
   loading: true,
   monthlyPriceCents: 0,
   activatedAt: null,
+  includedInPlan: false,
+  planCode: null,
 };
 
 /**
- * Consulta company_addons pra saber se um add-on está ativo pra empresa
- * do usuário logado.
+ * Diz se um add-on está ativo pra empresa do usuário logado.
+ * Ativo = contratado em company_addons OU incluso no plano (src/lib/addons.ts).
  *
  * Uso na UI:
  *   const { active, loading } = useAddon("financeiro");
@@ -40,25 +46,33 @@ export function useAddon(code: AddonCode): AddonState {
         setState({ ...INITIAL, loading: false });
         return;
       }
-      const { data, error } = await supabase
-        .from("company_addons")
-        .select("active, monthly_price_cents, activated_at")
-        .eq("company_id", companyId)
-        .eq("addon_code", code)
-        .maybeSingle();
+      const [addonRes, planRes] = await Promise.all([
+        supabase
+          .from("company_addons")
+          .select("active, monthly_price_cents, activated_at")
+          .eq("company_id", companyId)
+          .eq("addon_code", code)
+          .maybeSingle(),
+        supabase
+          .from("v_company_billing_summary")
+          .select("plan_code")
+          .eq("company_id", companyId)
+          .maybeSingle(),
+      ]);
 
       if (cancelled) return;
 
-      if (error || !data) {
-        setState({ ...INITIAL, loading: false });
-        return;
-      }
+      const planCode: string | null = (planRes.data as any)?.plan_code ?? null;
+      const included = planIncludesAddon(planCode, code);
+      const row = (addonRes.error ? null : addonRes.data) as any;
 
       setState({
-        active: !!data.active,
+        active: included || !!row?.active,
         loading: false,
-        monthlyPriceCents: data.monthly_price_cents ?? 0,
-        activatedAt: data.activated_at ?? null,
+        monthlyPriceCents: included ? 0 : (row?.monthly_price_cents ?? 0),
+        activatedAt: row?.activated_at ?? null,
+        includedInPlan: included,
+        planCode,
       });
     }
 
