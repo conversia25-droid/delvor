@@ -311,7 +311,10 @@ export default function FinanceiroPrecificacao() {
   }
   if (!addon.active) return <AddonUpsell code="financeiro" />;
 
-  const volumeWarning = settings.volume_mode === "auto" && !loading && autoMonthlyVolume === 0;
+  // Volume automático zerado ou muito baixo (< 10 un/mês) deixa o rateio irreal
+  // (1 unidade carregando as fixas inteiras) — avisa e manda pro manual.
+  const LOW_VOLUME = 10;
+  const volumeWarning = settings.volume_mode === "auto" && !loading && autoMonthlyVolume < LOW_VOLUME;
 
   return (
     <div className="space-y-6">
@@ -403,8 +406,10 @@ export default function FinanceiroPrecificacao() {
             <div className="mt-4 rounded-md bg-amber-500/10 ring-1 ring-amber-500/30 px-3 py-2.5 text-sm text-amber-600 dark:text-amber-400 flex items-start gap-2">
               <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
               <span>
-                Nenhuma venda faturada/entregue nos últimos {settings.volume_window_days} dias — sem volume não dá pra ratear as fixas.
-                Troque pra <strong>Informar manualmente</strong> e digite quantas unidades você espera vender por mês.
+                {autoMonthlyVolume === 0
+                  ? <>Nenhuma venda faturada/entregue nos últimos {settings.volume_window_days} dias — sem volume não dá pra ratear as fixas.</>
+                  : <>Só <strong>{Math.round(autoMonthlyVolume)} un/mês</strong> de vendas faturadas/entregues nos últimos {settings.volume_window_days} dias — com tão pouco volume, cada unidade carrega quase todas as fixas e o rateio de <strong>{formatBRL(rateio)}</strong> fica irreal.</>}
+                {" "}Troque pra <strong>Informar manualmente</strong> e digite quantas unidades você vende de verdade por mês.
               </span>
             </div>
           )}
