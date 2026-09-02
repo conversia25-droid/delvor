@@ -27,6 +27,9 @@ import {
 
 import type { Product, ProductCategory, ProductType, Supplier } from "@/types/delvor";
 import ImageUpload from "./ImageUpload";
+import { Link as RouterLink } from "react-router-dom";
+import { formatBRL as fmtBRL } from "@/lib/formatters";
+import { usePricingSuggestion } from "@/hooks/usePricingSuggestion";
 
 interface ProductFormDialogProps {
   product: Product | null;
@@ -126,6 +129,7 @@ export default function ProductFormDialog({
   suppliers,
 }: ProductFormDialogProps) {
   const { user } = useAuth();
+  const pricing = usePricingSuggestion();
   const [form, setForm] = useState<FormState>(EMPTY);
   const [saving, setSaving] = useState(false);
 
@@ -339,6 +343,52 @@ export default function ProductFormDialog({
                 />
               </div>
             </div>
+
+            {/* Preço sugerido — add-on Financeiro (custo + rateio das fixas + margem alvo) */}
+            {(() => {
+              const cost = parseNum(form.cost_price);
+              const sale = parseNum(form.sale_price);
+              const sug = pricing.suggest(cost);
+              if (sug) {
+                const below = sale > 0 && sale < sug.breakEven;
+                const applyValue = (Math.ceil(sug.suggested * 100) / 100).toFixed(2).replace(".", ",");
+                return (
+                  <div className={`rounded-md px-3 py-2 text-xs flex flex-wrap items-center justify-between gap-2 ring-1 ${
+                    below ? "bg-rose-500/10 ring-rose-500/30" : "bg-blue-500/10 ring-blue-500/30"
+                  }`}>
+                    <span>
+                      Preço sugerido: <strong>{fmtBRL(sug.suggested)}</strong>
+                      <span className="text-muted-foreground">
+                        {" "}· margem {sug.marginPct}%
+                        {sug.hasVolume
+                          ? ` · rateio de fixas ${fmtBRL(sug.rateio)}/un`
+                          : " · sem rateio de fixas (sem volume de vendas)"}
+                      </span>
+                      {below && (
+                        <span className="block text-rose-500 font-medium">
+                          Venda abaixo do mínimo viável ({fmtBRL(sug.breakEven)}) — prejuízo.
+                        </span>
+                      )}
+                    </span>
+                    <Button
+                      type="button" size="sm" variant="outline" className="h-7"
+                      onClick={() => setForm((f) => ({ ...f, sale_price: applyValue }))}
+                    >
+                      Aplicar {fmtBRL(sug.suggested)}
+                    </Button>
+                  </div>
+                );
+              }
+              if (!pricing.loading && !pricing.addonActive && cost > 0) {
+                return (
+                  <p className="text-xs text-muted-foreground">
+                    Preço sugerido (custo + rateio das fixas + margem) disponível com o add-on{" "}
+                    <RouterLink to="/settings?tab=billing" className="underline">Financeiro</RouterLink>.
+                  </p>
+                );
+              }
+              return null;
+            })()}
 
             {/* Estoque */}
             <div className="grid grid-cols-3 gap-3">
