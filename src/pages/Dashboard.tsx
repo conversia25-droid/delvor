@@ -35,6 +35,7 @@ import TopSellers from "@/components/dashboard/TopSellers";
 import CriticalOsList from "@/components/dashboard/CriticalOsList";
 import LowStockList from "@/components/dashboard/LowStockList";
 import FinanceiroDashboardCard from "@/components/dashboard/FinanceiroDashboardCard";
+import UpcomingBillsStrip from "@/components/dashboard/UpcomingBillsStrip";
 
 import type { Product, Sale, SaleItem, SaleStatus, ServiceOrder } from "@/types/delvor";
 import { SALE_STATUS_LABELS } from "@/types/delvor";
@@ -550,6 +551,9 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       {Header}
+
+      {/* Contas a pagar: atrasadas / hoje / próximos 7 dias (admin + financeiro, add-on ativo) */}
+      <UpcomingBillsStrip />
 
       {/* KPIs principais */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
