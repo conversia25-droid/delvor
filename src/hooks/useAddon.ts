@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { db as supabase } from "@/integrations/supabase/untyped";
 import { useAuth } from "@/contexts/AuthContext";
 
 export type AddonCode = "financeiro";

@@ -4,7 +4,7 @@ import {
   Wallet, Loader2, TrendingUp, TrendingDown, CheckCircle2, AlertTriangle,
   Sparkles, ArrowRight,
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { db as supabase } from "@/integrations/supabase/untyped";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAddon } from "@/hooks/useAddon";
 import { usePermissions } from "@/hooks/usePermissions";

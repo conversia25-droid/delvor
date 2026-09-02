@@ -53,6 +53,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const FinanceiroCategorias = lazy(() => import("./pages/financeiro/Categorias"));
 const FinanceiroFixas = lazy(() => import("./pages/financeiro/DespesasFixas"));
 const FinanceiroVariaveis = lazy(() => import("./pages/financeiro/DespesasVariaveis"));
+const FinanceiroPrecificacao = lazy(() => import("./pages/financeiro/Precificacao"));
 const MasterLogin = lazy(() => import("./pages/master/MasterLogin"));
 const MasterDashboard = lazy(() => import("./pages/master/MasterDashboard"));
 const MasterAnnouncements = lazy(() => import("./pages/master/MasterAnnouncements"));
@@ -513,6 +514,7 @@ function AppContent() {
           <Route path="/financeiro/categorias" element={<ProtectedRoute><ProtectedLayout><FinanceiroCategorias /></ProtectedLayout></ProtectedRoute>} />
           <Route path="/financeiro/fixas" element={<ProtectedRoute><ProtectedLayout><FinanceiroFixas /></ProtectedLayout></ProtectedRoute>} />
           <Route path="/financeiro/variaveis" element={<ProtectedRoute><ProtectedLayout><FinanceiroVariaveis /></ProtectedLayout></ProtectedRoute>} />
+          <Route path="/financeiro/precificacao" element={<ProtectedRoute><ProtectedLayout><FinanceiroPrecificacao /></ProtectedLayout></ProtectedRoute>} />
 
           {/* Redirect do /agenda legado pra /schedule */}
           <Route path="/agenda" element={<Navigate to="/schedule" replace />} />

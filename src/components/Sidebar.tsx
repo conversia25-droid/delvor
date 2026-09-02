@@ -28,6 +28,7 @@ import {
   FileText,
   CalendarClock,
   Receipt,
+  Calculator,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink } from "./NavLink";
@@ -69,6 +70,7 @@ const navigation = [
   { name: "Contas fixas",   href: "/financeiro/fixas",      icon: CalendarClock, addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
   { name: "Contas variáveis", href: "/financeiro/variaveis", icon: Receipt,      addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
   { name: "Categorias fin.",href: "/financeiro/categorias", icon: Tags,          addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
+  { name: "Precificação",   href: "/financeiro/precificacao", icon: Calculator,  addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
   { name: "Relatórios",   href: "/reports",        icon: BarChart3,    roles: ["admin", "gerente"] },
   { name: "Equipe",       href: "/team",           icon: Users,        roles: ["admin"] },
   { name: "Configurações",href: "/settings",       icon: Settings,     roles: ["admin"] },
