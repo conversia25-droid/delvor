@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Calculator, Loader2, Pencil, Search, Save, Info, AlertTriangle,
-  CheckCircle2, CircleDashed, TrendingDown, Wand2,
+  CheckCircle2, CircleDashed, TrendingDown, Wand2, Store,
 } from "lucide-react";
 import { db as supabase } from "@/integrations/supabase/untyped";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAddon } from "@/hooks/useAddon";
 import { useToast } from "@/hooks/use-toast";
 import { formatBRL } from "@/lib/formatters";
+import {
+  priceFor, realMarginPct, fixedLoad, hasFixedLoad,
+  type PricingMode, type PricingParams,
+} from "@/lib/pricing";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,10 +39,11 @@ interface Product {
 
 interface Settings {
   target_margin_pct: number;
-  volume_mode: "auto" | "manual";
+  volume_mode: PricingMode;
   volume_window_days: 30 | 60 | 90;
   manual_monthly_volume: number;
   fixed_cost_share_pct: number;
+  monthly_revenue_target: number; // reais (no banco: *_cents)
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -47,16 +52,17 @@ const DEFAULT_SETTINGS: Settings = {
   volume_window_days: 30,
   manual_monthly_volume: 0,
   fixed_cost_share_pct: 100,
+  monthly_revenue_target: 0,
 };
 
 type Status = "sem_custo" | "prejuizo" | "abaixo" | "ok";
 
 interface Computed {
   product: Product;
-  rateio: number;       // reais por unidade
-  breakEven: number;    // custo + rateio
-  suggested: number;    // break-even / (1 - margem)
-  marginPct: number | null; // (preço - breakEven) / preço
+  rateio: number;
+  breakEven: number;
+  suggested: number;
+  marginPct: number | null;
   qtySold: number;
   status: Status;
 }
@@ -68,9 +74,13 @@ const STATUS_META: Record<Status, { label: string; cls: string; order: number }>
   sem_custo: { label: "Sem custo",      cls: "bg-muted text-muted-foreground",    order: 3 },
 };
 
-function pct(n: number | null) {
+// Volume automático abaixo disso deixa o rateio irreal (1 unidade carregando
+// as fixas inteiras) — avisa e sugere o modo "meta".
+const LOW_VOLUME = 10;
+
+function pct(n: number | null, digits = 1) {
   if (n === null || !Number.isFinite(n)) return "—";
-  return `${n.toFixed(1).replace(".", ",")}%`;
+  return `${n.toFixed(digits).replace(".", ",")}%`;
 }
 
 /* ───────────────────────── célula editável ───────────────────────── */
@@ -146,7 +156,7 @@ export default function FinanceiroPrecificacao() {
 
   /* ---------- carga ---------- */
   const loadVolume = useCallback(async (days: number) => {
-    const { data, error } = await supabase.rpc("get_product_sales_volume", { p_days: days } as any);
+    const { data, error } = await supabase.rpc("get_product_sales_volume", { p_days: days });
     if (error) {
       toast({ title: "Erro ao calcular volume", description: error.message, variant: "destructive" });
       return new Map<string, number>();
@@ -171,7 +181,7 @@ export default function FinanceiroPrecificacao() {
         .eq("company_id", companyId)
         .eq("active", true),
       supabase.from("financial_settings")
-        .select("target_margin_pct, volume_mode, volume_window_days, manual_monthly_volume, fixed_cost_share_pct")
+        .select("*")
         .eq("company_id", companyId)
         .maybeSingle(),
     ]);
@@ -192,13 +202,15 @@ export default function FinanceiroPrecificacao() {
     })));
     setFixedTotal(((fixRes.data as any[]) ?? []).reduce((s, r) => s + Number(r.amount_cents || 0), 0) / 100);
 
-    const s: Settings = setRes.data
+    const d = setRes.data as any;
+    const s: Settings = d
       ? {
-          target_margin_pct: Number((setRes.data as any).target_margin_pct),
-          volume_mode: (setRes.data as any).volume_mode,
-          volume_window_days: Number((setRes.data as any).volume_window_days) as 30 | 60 | 90,
-          manual_monthly_volume: Number((setRes.data as any).manual_monthly_volume),
-          fixed_cost_share_pct: Number((setRes.data as any).fixed_cost_share_pct),
+          target_margin_pct: Number(d.target_margin_pct),
+          volume_mode: (d.volume_mode as PricingMode) || "auto",
+          volume_window_days: (Number(d.volume_window_days) || 30) as 30 | 60 | 90,
+          manual_monthly_volume: Number(d.manual_monthly_volume) || 0,
+          fixed_cost_share_pct: Number(d.fixed_cost_share_pct),
+          monthly_revenue_target: (Number(d.monthly_revenue_target_cents) || 0) / 100,
         }
       : DEFAULT_SETTINGS;
     setSettings(s);
@@ -209,7 +221,7 @@ export default function FinanceiroPrecificacao() {
 
   useEffect(() => { if (addon.active) void load(); }, [addon.active, load]);
 
-  // Trocar a janela recarrega só o volume (sem recarregar a página inteira)
+  // Trocar a janela recarrega só o volume
   useEffect(() => {
     if (!addon.active || loading) return;
     if (settings.volume_window_days === savedSettings.volume_window_days) return;
@@ -217,36 +229,42 @@ export default function FinanceiroPrecificacao() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.volume_window_days]);
 
-  /* ---------- cálculo ---------- */
+  /* ---------- parâmetros da conta ---------- */
   const autoMonthlyVolume = useMemo(() => {
     let total = 0;
     volumeByProduct.forEach((q) => { total += q; });
     return total / (settings.volume_window_days / 30);
   }, [volumeByProduct, settings.volume_window_days]);
 
-  const monthlyVolume = settings.volume_mode === "auto" ? autoMonthlyVolume : settings.manual_monthly_volume;
-  const fixedShare = fixedTotal * (settings.fixed_cost_share_pct / 100);
-  const rateio = monthlyVolume > 0 ? fixedShare / monthlyVolume : 0;
-  const marginFactor = 1 - settings.target_margin_pct / 100;
+  const params: PricingParams = useMemo(() => ({
+    mode: settings.volume_mode,
+    targetMarginPct: settings.target_margin_pct,
+    fixedMonthly: fixedTotal * (settings.fixed_cost_share_pct / 100),
+    monthlyVolume: settings.volume_mode === "auto" ? autoMonthlyVolume : settings.manual_monthly_volume,
+    monthlyRevenueTarget: settings.monthly_revenue_target,
+  }), [settings, fixedTotal, autoMonthlyVolume]);
+
+  const isMeta = params.mode === "meta";
+  const load_ = fixedLoad(params);
+  const fixedApplied = hasFixedLoad(params);
 
   const computed: Computed[] = useMemo(() => {
     const windowFactor = settings.volume_window_days / 30;
     return products.map((p) => {
-      const breakEven = p.cost_price + rateio;
-      const suggested = marginFactor > 0 ? breakEven / marginFactor : breakEven;
-      const marginPct = p.sale_price > 0 ? ((p.sale_price - breakEven) / p.sale_price) * 100 : null;
+      const r = priceFor(p.cost_price, params);
+      const marginPct = realMarginPct(p.cost_price, p.sale_price, params);
       let status: Status;
       if (p.cost_price <= 0) status = "sem_custo";
-      else if (p.sale_price < breakEven) status = "prejuizo";
-      else if (p.sale_price < suggested) status = "abaixo";
+      else if (p.sale_price < r.breakEven) status = "prejuizo";
+      else if (p.sale_price < r.suggested) status = "abaixo";
       else status = "ok";
       return {
-        product: p, rateio, breakEven, suggested, marginPct,
+        product: p, rateio: r.rateio, breakEven: r.breakEven, suggested: r.suggested, marginPct,
         qtySold: (volumeByProduct.get(p.id) ?? 0) / windowFactor,
         status,
       };
     });
-  }, [products, rateio, marginFactor, volumeByProduct, settings.volume_window_days]);
+  }, [products, params, volumeByProduct, settings.volume_window_days]);
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -267,7 +285,15 @@ export default function FinanceiroPrecificacao() {
     if (!companyId) return;
     setSavingSettings(true);
     const { error } = await supabase.from("financial_settings").upsert(
-      { company_id: companyId, ...settings } as any,
+      {
+        company_id: companyId,
+        target_margin_pct: settings.target_margin_pct,
+        volume_mode: settings.volume_mode,
+        volume_window_days: settings.volume_window_days,
+        manual_monthly_volume: settings.manual_monthly_volume,
+        fixed_cost_share_pct: settings.fixed_cost_share_pct,
+        monthly_revenue_target_cents: Math.round(settings.monthly_revenue_target * 100),
+      },
       { onConflict: "company_id" },
     );
     if (error) {
@@ -284,7 +310,7 @@ export default function FinanceiroPrecificacao() {
       p_product_id: productId,
       p_cost_price: patch.cost ?? null,
       p_sale_price: patch.sale ?? null,
-    } as any);
+    });
     if (error) {
       toast({ title: "Erro ao salvar preço", description: error.message, variant: "destructive" });
       return;
@@ -311,10 +337,9 @@ export default function FinanceiroPrecificacao() {
   }
   if (!addon.active) return <AddonUpsell code="financeiro" />;
 
-  // Volume automático zerado ou muito baixo (< 10 un/mês) deixa o rateio irreal
-  // (1 unidade carregando as fixas inteiras) — avisa e manda pro manual.
-  const LOW_VOLUME = 10;
-  const volumeWarning = settings.volume_mode === "auto" && !loading && autoMonthlyVolume < LOW_VOLUME;
+  const lowVolumeWarning = params.mode === "auto" && !loading && autoMonthlyVolume < LOW_VOLUME;
+  const metaMissing = isMeta && settings.monthly_revenue_target <= 0;
+  const metaInvalid = isMeta && fixedApplied && (load_.pct * 100 + settings.target_margin_pct) >= 100;
 
   return (
     <div className="space-y-6">
@@ -348,18 +373,19 @@ export default function FinanceiroPrecificacao() {
             </div>
 
             <div>
-              <Label>Volume mensal</Label>
+              <Label>Como ratear as fixas</Label>
               <Select
                 value={settings.volume_mode}
-                onValueChange={(v) => setSettings((s) => ({ ...s, volume_mode: v as "auto" | "manual" }))}
+                onValueChange={(v) => setSettings((s) => ({ ...s, volume_mode: v as PricingMode }))}
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="auto">Automático (pelas vendas)</SelectItem>
-                  <SelectItem value="manual">Informar manualmente</SelectItem>
+                  <SelectItem value="auto">Por unidade — pelas vendas</SelectItem>
+                  <SelectItem value="manual">Por unidade — informar un/mês</SelectItem>
+                  <SelectItem value="meta">Por meta de faturamento (loja nova)</SelectItem>
                 </SelectContent>
               </Select>
-              {settings.volume_mode === "auto" ? (
+              {settings.volume_mode === "auto" && (
                 <Select
                   value={String(settings.volume_window_days)}
                   onValueChange={(v) => setSettings((s) => ({ ...s, volume_window_days: Number(v) as 30 | 60 | 90 }))}
@@ -371,7 +397,8 @@ export default function FinanceiroPrecificacao() {
                     <SelectItem value="90">Últimos 90 dias (média/mês)</SelectItem>
                   </SelectContent>
                 </Select>
-              ) : (
+              )}
+              {settings.volume_mode === "manual" && (
                 <Input
                   className="mt-2"
                   type="number" min={0} step={1}
@@ -379,6 +406,19 @@ export default function FinanceiroPrecificacao() {
                   value={settings.manual_monthly_volume || ""}
                   onChange={(e) => setSettings((s) => ({ ...s, manual_monthly_volume: Math.max(0, Math.round(Number(e.target.value) || 0)) }))}
                 />
+              )}
+              {settings.volume_mode === "meta" && (
+                <>
+                  <MoneyInput
+                    className="mt-2"
+                    placeholder="meta de faturamento / mês"
+                    value={settings.monthly_revenue_target}
+                    onChange={(v) => setSettings((s) => ({ ...s, monthly_revenue_target: v }))}
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Quanto você precisa faturar por mês em produtos. As fixas viram uma % de cada venda.
+                  </p>
+                </>
               )}
             </div>
 
@@ -402,14 +442,41 @@ export default function FinanceiroPrecificacao() {
             </div>
           </div>
 
-          {volumeWarning && (
+          {lowVolumeWarning && (
+            <div className="mt-4 rounded-md bg-amber-500/10 ring-1 ring-amber-500/30 px-3 py-2.5 text-sm text-amber-600 dark:text-amber-400 flex flex-wrap items-start gap-2">
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+              <span className="flex-1 min-w-[240px]">
+                {autoMonthlyVolume === 0
+                  ? <>Nenhuma venda faturada/entregue nos últimos {settings.volume_window_days} dias.</>
+                  : <>Só <strong>{Math.round(autoMonthlyVolume)} un/mês</strong> de vendas faturadas/entregues nos últimos {settings.volume_window_days} dias — cada unidade carrega quase todas as fixas e o rateio de <strong>{formatBRL(load_.perUnit)}</strong> fica irreal.</>}
+                {" "}<strong>Loja nova ou sem histórico?</strong> Use a meta de faturamento: você diz quanto precisa faturar por mês e as fixas viram uma % de cada venda.
+              </span>
+              <Button
+                size="sm" variant="outline" className="border-amber-500/40"
+                onClick={() => setSettings((s) => ({ ...s, volume_mode: "meta" }))}
+              >
+                <Store className="h-4 w-4 mr-1" /> Usar meta de faturamento
+              </Button>
+            </div>
+          )}
+
+          {metaMissing && (
             <div className="mt-4 rounded-md bg-amber-500/10 ring-1 ring-amber-500/30 px-3 py-2.5 text-sm text-amber-600 dark:text-amber-400 flex items-start gap-2">
               <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
               <span>
-                {autoMonthlyVolume === 0
-                  ? <>Nenhuma venda faturada/entregue nos últimos {settings.volume_window_days} dias — sem volume não dá pra ratear as fixas.</>
-                  : <>Só <strong>{Math.round(autoMonthlyVolume)} un/mês</strong> de vendas faturadas/entregues nos últimos {settings.volume_window_days} dias — com tão pouco volume, cada unidade carrega quase todas as fixas e o rateio de <strong>{formatBRL(rateio)}</strong> fica irreal.</>}
-                {" "}Troque pra <strong>Informar manualmente</strong> e digite quantas unidades você vende de verdade por mês.
+                Informe a <strong>meta de faturamento mensal</strong> em produtos. Sem ela a conta sai só com custo + margem, sem as fixas.
+                Dica: some suas fixas ({formatBRL(fixedTotal)}) com o lucro que você quer tirar por mês e divida pela margem —
+                esse é o mínimo que precisa faturar.
+              </span>
+            </div>
+          )}
+
+          {metaInvalid && (
+            <div className="mt-4 rounded-md bg-rose-500/10 ring-1 ring-rose-500/30 px-3 py-2.5 text-sm text-rose-600 dark:text-rose-400 flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+              <span>
+                As fixas já comem <strong>{pct(load_.pct * 100)}</strong> de cada venda; com margem de {settings.target_margin_pct}% passa de 100% — a conta não fecha.
+                Aumente a meta de faturamento, reduza a parcela das fixas ou a margem.
               </span>
             </div>
           )}
@@ -421,24 +488,47 @@ export default function FinanceiroPrecificacao() {
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Fixas absorvidas / mês</CardTitle></CardHeader>
           <CardContent>
-            <p className="text-2xl font-semibold">{formatBRL(fixedShare)}</p>
+            <p className="text-2xl font-semibold">{formatBRL(params.fixedMonthly)}</p>
             <p className="text-xs text-muted-foreground">{settings.fixed_cost_share_pct}% de {formatBRL(fixedTotal)}</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Volume mensal</CardTitle></CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold">{Math.round(monthlyVolume).toLocaleString("pt-BR")} <span className="text-sm font-normal text-muted-foreground">un</span></p>
-            <p className="text-xs text-muted-foreground">{settings.volume_mode === "auto" ? `média dos últimos ${settings.volume_window_days} dias` : "informado manualmente"}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Rateio por unidade</CardTitle></CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold">{formatBRL(rateio)}</p>
-            <p className="text-xs text-muted-foreground">fixas ÷ volume — entra em cada produto</p>
-          </CardContent>
-        </Card>
+
+        {isMeta ? (
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Meta de faturamento</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-2xl font-semibold">{formatBRL(params.monthlyRevenueTarget)}</p>
+              <p className="text-xs text-muted-foreground">por mês, em produtos</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Volume mensal</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-2xl font-semibold">{Math.round(params.monthlyVolume).toLocaleString("pt-BR")} <span className="text-sm font-normal text-muted-foreground">un</span></p>
+              <p className="text-xs text-muted-foreground">{params.mode === "auto" ? `média dos últimos ${settings.volume_window_days} dias` : "informado manualmente"}</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {isMeta ? (
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Peso das fixas</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-2xl font-semibold">{pct(load_.pct * 100)}</p>
+              <p className="text-xs text-muted-foreground">de cada venda vai pagar as fixas</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Rateio por unidade</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-2xl font-semibold">{formatBRL(load_.perUnit)}</p>
+              <p className="text-xs text-muted-foreground">fixas ÷ volume — entra em cada produto</p>
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Situação</CardTitle></CardHeader>
           <CardContent className="space-y-1 text-sm">
@@ -482,7 +572,7 @@ export default function FinanceiroPrecificacao() {
                 <TableRow>
                   <TableHead>Produto</TableHead>
                   <TableHead className="text-right">Custo</TableHead>
-                  <TableHead className="text-right">Rateio</TableHead>
+                  <TableHead className="text-right">{isMeta ? "Fixas" : "Rateio"}</TableHead>
                   <TableHead className="text-right">Mín. viável</TableHead>
                   <TableHead className="text-right">Preço atual</TableHead>
                   <TableHead className="text-right">Margem real</TableHead>
@@ -497,6 +587,7 @@ export default function FinanceiroPrecificacao() {
                   <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground">Nenhum produto.</TableCell></TableRow>
                 ) : visible.map((c) => {
                   const meta = STATUS_META[c.status];
+                  const noCost = c.status === "sem_custo";
                   return (
                     <TableRow key={c.product.id}>
                       <TableCell>
@@ -508,15 +599,15 @@ export default function FinanceiroPrecificacao() {
                       <TableCell className="text-right">
                         <EditableMoney value={c.product.cost_price} onCommit={(v) => setPricing(c.product.id, { cost: v })} />
                       </TableCell>
-                      <TableCell className="text-right font-mono text-xs text-muted-foreground">{formatBRL(c.rateio)}</TableCell>
-                      <TableCell className="text-right font-mono text-xs">{c.status === "sem_custo" ? "—" : formatBRL(c.breakEven)}</TableCell>
+                      <TableCell className="text-right font-mono text-xs text-muted-foreground">{noCost ? "—" : formatBRL(c.rateio)}</TableCell>
+                      <TableCell className="text-right font-mono text-xs">{noCost ? "—" : formatBRL(c.breakEven)}</TableCell>
                       <TableCell className="text-right">
                         <EditableMoney value={c.product.sale_price} onCommit={(v) => setPricing(c.product.id, { sale: v })} />
                       </TableCell>
                       <TableCell className={`text-right font-mono text-xs ${c.marginPct !== null && c.marginPct < 0 ? "text-rose-500" : ""}`}>
-                        {c.status === "sem_custo" ? "—" : pct(c.marginPct)}
+                        {noCost ? "—" : pct(c.marginPct)}
                       </TableCell>
-                      <TableCell className="text-right font-mono text-xs font-semibold">{c.status === "sem_custo" ? "—" : formatBRL(c.suggested)}</TableCell>
+                      <TableCell className="text-right font-mono text-xs font-semibold">{noCost ? "—" : formatBRL(c.suggested)}</TableCell>
                       <TableCell>
                         <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs ${meta.cls}`}>
                           {c.status === "ok" ? <CheckCircle2 className="h-3 w-3" />
@@ -541,22 +632,36 @@ export default function FinanceiroPrecificacao() {
             <>
               <DialogHeader>
                 <DialogTitle>{detail.product.name}</DialogTitle>
-                <DialogDescription>
-                  Como chegamos no preço sugerido.
-                </DialogDescription>
+                <DialogDescription>Como chegamos no preço sugerido.</DialogDescription>
               </DialogHeader>
 
               <div className="rounded-md border font-mono text-sm">
                 <Row label="Custo do produto" value={formatBRL(detail.product.cost_price)} />
-                <Row
-                  label={`Rateio de fixas (${formatBRL(fixedShare)} ÷ ${Math.round(monthlyVolume)} un/mês)`}
-                  value={`+ ${formatBRL(detail.rateio)}`}
-                />
-                <Row label="Mínimo viável (margem zero)" value={formatBRL(detail.breakEven)} strong />
-                <Row
-                  label={`Margem alvo de ${settings.target_margin_pct}% sobre o preço`}
-                  value={`÷ ${marginFactor.toFixed(2).replace(".", ",")}`}
-                />
+                {isMeta ? (
+                  <>
+                    <Row
+                      label={`Fixas: ${pct(load_.pct * 100)} de cada venda (${formatBRL(params.fixedMonthly)} ÷ ${formatBRL(params.monthlyRevenueTarget)} de meta)`}
+                      value={`÷ ${(1 - load_.pct).toFixed(2).replace(".", ",")}`}
+                    />
+                    <Row label="Mínimo viável (margem zero)" value={formatBRL(detail.breakEven)} strong />
+                    <Row
+                      label={`Margem alvo de ${settings.target_margin_pct}% sobre o preço`}
+                      value={`custo ÷ ${Math.max(0, 1 - load_.pct - settings.target_margin_pct / 100).toFixed(2).replace(".", ",")}`}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <Row
+                      label={`Rateio de fixas (${formatBRL(params.fixedMonthly)} ÷ ${Math.round(params.monthlyVolume)} un/mês)`}
+                      value={`+ ${formatBRL(detail.rateio)}`}
+                    />
+                    <Row label="Mínimo viável (margem zero)" value={formatBRL(detail.breakEven)} strong />
+                    <Row
+                      label={`Margem alvo de ${settings.target_margin_pct}% sobre o preço`}
+                      value={`÷ ${(1 - settings.target_margin_pct / 100).toFixed(2).replace(".", ",")}`}
+                    />
+                  </>
+                )}
                 <Row label="Preço sugerido" value={formatBRL(detail.suggested)} strong accent />
                 <div className="border-t px-3 py-2 flex justify-between text-xs text-muted-foreground">
                   <span>Preço atual: {formatBRL(detail.product.sale_price)}</span>
@@ -566,17 +671,25 @@ export default function FinanceiroPrecificacao() {
 
               <div className="rounded-md bg-muted/50 px-3 py-2.5 text-xs text-muted-foreground flex gap-2">
                 <Info className="h-4 w-4 shrink-0 mt-0.5" />
-                <span>
-                  <strong>Volume</strong> é quantas unidades (de todos os produtos) você vende por mês. As despesas fixas
-                  são divididas por esse número — quanto mais você vende, menos cada unidade precisa carregar de aluguel,
-                  salário etc. Este produto vendeu ~{Math.round(detail.qtySold)} un/mês na janela escolhida.
-                </span>
+                {isMeta ? (
+                  <span>
+                    <strong>Meta de faturamento:</strong> loja nova não sabe quantas unidades vai vender, mas sabe quanto
+                    precisa faturar. Dividimos as fixas pela meta e cada venda paga uma fatia — quanto mais você faturar
+                    de verdade, menor essa fatia fica.
+                  </span>
+                ) : (
+                  <span>
+                    <strong>Volume</strong> é quantas unidades (de todos os produtos) você vende por mês. As despesas fixas
+                    são divididas por esse número — quanto mais você vende, menos cada unidade precisa carregar de aluguel,
+                    salário etc. Este produto vendeu ~{Math.round(detail.qtySold)} un/mês na janela escolhida.
+                  </span>
+                )}
               </div>
 
               <DialogFooter>
                 <Button variant="outline" onClick={() => setDetail(null)}>Fechar</Button>
                 <Button
-                  disabled={applying || detail.status === "sem_custo"}
+                  disabled={applying || detail.status === "sem_custo" || metaInvalid}
                   onClick={() => void applySuggested(detail)}
                 >
                   {applying ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Wand2 className="h-4 w-4 mr-2" />}
@@ -595,7 +708,7 @@ function Row({ label, value, strong, accent }: { label: string; value: string; s
   return (
     <div className={`flex items-center justify-between gap-4 px-3 py-2 border-b last:border-b-0 ${strong ? "font-semibold" : ""} ${accent ? "text-blue-500" : ""}`}>
       <span className="font-sans text-xs text-muted-foreground">{label}</span>
-      <span>{value}</span>
+      <span className="whitespace-nowrap">{value}</span>
     </div>
   );
 }

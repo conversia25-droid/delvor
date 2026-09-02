@@ -360,9 +360,11 @@ export default function ProductFormDialog({
                       Preço sugerido: <strong>{fmtBRL(sug.suggested)}</strong>
                       <span className="text-muted-foreground">
                         {" "}· margem {sug.marginPct}%
-                        {sug.hasVolume
-                          ? ` · rateio de fixas ${fmtBRL(sug.rateio)}/un`
-                          : " · sem rateio de fixas (sem volume de vendas)"}
+                        {!sug.hasFixedLoad
+                          ? " · sem as fixas (configure volume ou meta em Precificação)"
+                          : sug.mode === "meta"
+                            ? ` · fixas ${sug.fixedPct.toFixed(1).replace(".", ",")}% de cada venda`
+                            : ` · rateio de fixas ${fmtBRL(sug.rateio)}/un`}
                       </span>
                       {below && (
                         <span className="block text-rose-500 font-medium">
