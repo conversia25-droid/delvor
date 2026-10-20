@@ -54,6 +54,7 @@ const FinanceiroCategorias = lazy(() => import("./pages/financeiro/Categorias"))
 const FinanceiroFixas = lazy(() => import("./pages/financeiro/DespesasFixas"));
 const FinanceiroVariaveis = lazy(() => import("./pages/financeiro/DespesasVariaveis"));
 const FinanceiroPrecificacao = lazy(() => import("./pages/financeiro/Precificacao"));
+const FinanceiroReceber = lazy(() => import("./pages/financeiro/Receber"));
 const MasterLogin = lazy(() => import("./pages/master/MasterLogin"));
 const MasterDashboard = lazy(() => import("./pages/master/MasterDashboard"));
 const MasterAnnouncements = lazy(() => import("./pages/master/MasterAnnouncements"));
@@ -521,6 +522,8 @@ function AppContent() {
           <Route path="/financeiro/fixas" element={<ProtectedRoute><ProtectedLayout><FinanceiroFixas /></ProtectedLayout></ProtectedRoute>} />
           <Route path="/financeiro/variaveis" element={<ProtectedRoute><ProtectedLayout><FinanceiroVariaveis /></ProtectedLayout></ProtectedRoute>} />
           <Route path="/financeiro/precificacao" element={<ProtectedRoute><ProtectedLayout><FinanceiroPrecificacao /></ProtectedLayout></ProtectedRoute>} />
+          {/* Contas a receber: núcleo (não depende do add-on financeiro) */}
+          <Route path="/financeiro/receber" element={<ProtectedRoute><ProtectedLayout><FinanceiroReceber /></ProtectedLayout></ProtectedRoute>} />
 
           {/* Redirect do /agenda legado pra /schedule */}
           <Route path="/agenda" element={<Navigate to="/schedule" replace />} />

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   BarChart3, Loader2, TrendingUp, Receipt, Users, Package,
   Percent, Calendar, RefreshCw, Trophy, Wrench, FileDown, FileSpreadsheet,
-  AlertTriangle, UserRound, CheckCircle2, Wallet,
+  AlertTriangle, UserRound, CheckCircle2, Wallet, HandCoins, CalendarClock,
 } from "lucide-react";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -23,6 +23,7 @@ import { formatBRL } from "@/lib/formatters";
 import { OS_STATUS_LABELS } from "@/types/delvor";
 import { downloadCSV, downloadReportPDF, type PdfSection } from "@/lib/reportExport";
 import { loadCompanyHeader, imageToDataUrl } from "@/lib/companyInfo";
+import { fetchReceivedSummary } from "@/lib/receivables";
 
 /* ====================================================================
    PERÍODO — helpers + componente de filtro
@@ -115,12 +116,13 @@ function ExportButtons({ onCSV, onPDF }: { onCSV: () => void; onPDF: () => void 
   );
 }
 
-function Kpi({ icon: Icon, label, value, tone }: { icon: any; label: string; value: string; tone?: string }) {
+function Kpi({ icon: Icon, label, value, tone, hint }: { icon: any; label: string; value: string; tone?: string; hint?: string }) {
   const toneClass: Record<string, string> = { emerald: "text-emerald-400", violet: "text-blue-400", amber: "text-amber-400" };
   return (
     <div className="rounded-lg border bg-card p-4">
       <div className="text-xs text-muted-foreground flex items-center gap-1"><Icon className="h-3 w-3" /> {label}</div>
       <div className={`text-2xl font-bold mt-1 ${tone ? toneClass[tone] : ""}`}>{value}</div>
+      {hint && <div className="mt-0.5 text-[11px] text-muted-foreground">{hint}</div>}
     </div>
   );
 }
@@ -194,6 +196,16 @@ function SalesReport() {
   const [sellerNames, setSellerNames] = useState<Record<string, string>>({});
   const [custNames, setCustNames] = useState<Record<string, string>>({});
   const [sellerFilter, setSellerFilter] = useState("all");
+
+  /* Recebido no período pela DATA DO RECEBIMENTO (baixa de hoje de venda antiga
+     entra hoje). Sem acesso ao financeiro a RPC recusa e o card mostra "—". */
+  const [received, setReceived] = useState<{ received_total: number; received_count: number; fee_total: number } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetchReceivedSummary(range.start, range.end, sellerFilter === "all" ? null : sellerFilter)
+      .then((r) => { if (alive) setReceived(r); });
+    return () => { alive = false; };
+  }, [range.start, range.end, sellerFilter]);
 
   /* quais blocos incluir no relatório (escolhidos antes de gerar) */
   const [show, setShow] = useState({
@@ -690,8 +702,22 @@ function SalesReport() {
         <Loading />
       ) : (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <Kpi icon={TrendingUp} label="Faturamento" value={formatBRL(totals.revenue)} tone="emerald" />
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+            <Kpi icon={TrendingUp} label="Vendido" value={formatBRL(totals.revenue)} hint="vendas fechadas no período" />
+            <Kpi
+              icon={HandCoins}
+              label="Recebido"
+              value={received ? formatBRL(received.received_total) : "—"}
+              tone="emerald"
+              hint={received && received.fee_total > 0 ? `taxas ${formatBRL(received.fee_total)}` : "pela data do recebimento"}
+            />
+            <Kpi
+              icon={CalendarClock}
+              label="A receber"
+              value={formatBRL(pendingTotals.amount)}
+              tone="amber"
+              hint={pendingTotals.overdue > 0 ? `${pendingTotals.overdue} vencida${pendingTotals.overdue > 1 ? "s" : ""} · vendas do período` : "das vendas do período"}
+            />
             <Kpi icon={Receipt} label="Vendas" value={String(totals.count)} />
             <Kpi icon={BarChart3} label="Ticket médio" value={formatBRL(totals.avg)} />
             <Kpi icon={Percent} label="Comissões" value={formatBRL(totals.commission)} tone="violet" />

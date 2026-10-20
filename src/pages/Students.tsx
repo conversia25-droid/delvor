@@ -29,7 +29,7 @@ export default function Students() {
     if (!companyId) return;
     setLoading(true);
     const { data, error } = await supabase
-      .from("students")
+      .from("students" as any)
       .select("id,name,cpf,phone,category_goal,active,created_at")
       .eq("company_id", companyId)
       .order("created_at", { ascending: false });
@@ -49,7 +49,7 @@ export default function Students() {
       return;
     }
     setSaving(true);
-    const { error } = await supabase.from("students").insert({
+    const { error } = await supabase.from("students" as any).insert({
       company_id: companyId,
       name: form.name.trim(),
       cpf: form.cpf || null,

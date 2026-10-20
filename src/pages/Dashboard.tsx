@@ -8,6 +8,7 @@ import {
   Clock,
   DollarSign,
   FileText,
+  HandCoins,
   PackageOpen,
   Percent,
   Plus,
@@ -23,6 +24,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useReceivablesOverview } from "@/hooks/useReceivablesOverview";
 
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -134,6 +136,10 @@ export default function Dashboard() {
   const [customerCount, setCustomerCount] = useState(0);
   const [cashSession, setCashSession] = useState<CashSession | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Recebido / a receber (só quem tem acesso ao financeiro)
+  const canSeeReceivables = !!user?.roles?.some((r) => ["admin", "gerente", "financeiro", "super_admin"].includes(r));
+  const receivables = useReceivablesOverview(canSeeReceivables);
 
   async function load() {
     if (!companyId) return;
@@ -452,7 +458,7 @@ export default function Dashboard() {
               to="/pdv"
             />
             <StatCard
-              label="Faturamento hoje"
+              label="Vendido hoje"
               value={formatBRL(todayRevenue)}
               icon={<DollarSign className="h-4 w-4" />}
               tone="emerald"
@@ -483,7 +489,7 @@ export default function Dashboard() {
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <StatCard
-              label="Faturamento do mês"
+              label="Vendido no mês"
               value={formatBRL(myMonthRevenue)}
               hint={`${myInvoicedMonth.length} ${myInvoicedMonth.length === 1 ? "venda" : "vendas"} fechadas`}
               icon={<DollarSign className="h-4 w-4" />}
@@ -558,12 +564,25 @@ export default function Dashboard() {
       {/* KPIs principais */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard
-          label="Faturamento do mês"
+          label="Vendido no mês"
           value={formatBRL(kpis.monthRevenue)}
-          hint={`Período (${periodHintLabel(period)}): ${formatBRL(kpis.periodRevenue)}`}
+          hint={`Período (${periodHintLabel(period)}): ${formatBRL(kpis.periodRevenue)} · ticket ${formatBRL(kpis.avgTicket)}`}
           icon={<DollarSign className="h-4 w-4" />}
-          tone="emerald"
+          tone="sky"
           to="/sales"
+        />
+        <StatCard
+          label="Recebido no mês"
+          value={receivables ? formatBRL(receivables.received_month) : "—"}
+          hint={receivables
+            ? receivables.overdue_count > 0
+              ? `A receber ${formatBRL(receivables.open_total)} · ${formatBRL(receivables.overdue_total)} vencido`
+              : `A receber ${formatBRL(receivables.open_total)} · nada vencido`
+            : "boleto, cartão e crediário entram após a baixa"}
+          icon={<HandCoins className="h-4 w-4" />}
+          tone={receivables && receivables.overdue_count > 0 ? "rose" : "emerald"}
+          to="/financeiro/receber"
+          alert={!!receivables && receivables.overdue_count > 0}
         />
         <StatCard
           label="OS em andamento"
@@ -590,12 +609,6 @@ export default function Dashboard() {
           to="/sales"
         />
 
-        <StatCard
-          label="Ticket médio"
-          value={formatBRL(kpis.avgTicket)}
-          icon={<TrendingUp className="h-4 w-4" />}
-          tone="teal"
-        />
         <StatCard
           label="Estoque crítico"
           value={kpis.lowStockCount}

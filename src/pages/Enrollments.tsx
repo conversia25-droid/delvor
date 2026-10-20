@@ -45,7 +45,7 @@ export default function Enrollments() {
     if (!companyId) return;
     setLoading(true);
     const { data, error } = await supabase
-      .from("enrollments")
+      .from("enrollments" as any)
       .select("id,number,category,status,required_theory_hours,required_practice_hours,completed_theory_hours,completed_practice_hours,students(name)")
       .eq("company_id", companyId)
       .order("number", { ascending: false });
@@ -57,7 +57,7 @@ export default function Enrollments() {
   async function loadStudents() {
     if (!companyId) return;
     const { data } = await supabase
-      .from("students")
+      .from("students" as any)
       .select("id,name,category_goal")
       .eq("company_id", companyId)
       .eq("active", true)
@@ -84,7 +84,7 @@ export default function Enrollments() {
   async function move(id: string, status: EnrollmentStatus) {
     const prev = rows;
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, status } : r)));
-    const { error } = await supabase.from("enrollments").update({ status }).eq("id", id);
+    const { error } = await supabase.from("enrollments" as any).update({ status }).eq("id", id);
     if (error) {
       toast.error("Erro ao mover: " + error.message);
       setRows(prev);
@@ -97,7 +97,7 @@ export default function Enrollments() {
       return;
     }
     setSaving(true);
-    const { error } = await supabase.from("enrollments").insert({
+    const { error } = await supabase.from("enrollments" as any).insert({
       company_id: companyId,
       student_id: form.student_id,
       category: form.category,

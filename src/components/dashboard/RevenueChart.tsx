@@ -47,7 +47,7 @@ export default function RevenueChart({ sales, days = 30 }: RevenueChartProps) {
     <div className="rounded-lg border bg-card p-4">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-sm font-semibold">Faturamento — últimos {days} dias</h3>
+          <h3 className="text-sm font-semibold">Vendido — últimos {days} dias</h3>
           <p className="text-xs text-muted-foreground">Total no período: <span className="font-mono text-foreground">{formatBRL(total)}</span></p>
         </div>
       </div>
@@ -83,7 +83,7 @@ export default function RevenueChart({ sales, days = 30 }: RevenueChartProps) {
               <Tooltip
                 contentStyle={{ background: "rgb(20,20,30)", border: "1px solid rgb(60,60,80)", borderRadius: 6, fontSize: 12 }}
                 labelStyle={{ color: "rgb(180,180,190)" }}
-                formatter={(v: any) => [formatBRL(Number(v)), "Faturamento"]}
+                formatter={(v: any) => [formatBRL(Number(v)), "Vendido"]}
               />
               <Area
                 type="monotone"

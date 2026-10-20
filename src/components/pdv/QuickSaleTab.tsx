@@ -19,6 +19,7 @@ import {
 import CustomerCombobox from "@/components/sales/CustomerCombobox";
 import { formatBRL } from "@/lib/formatters";
 import { getOpenSession, openSession, type CashSession } from "@/lib/cashRegister";
+import { addDaysISO, DEFAULT_DUE_DAYS, isPendingMethod, localISODate } from "@/lib/receivables";
 
 /* ====================================================================
    TIPOS
@@ -52,6 +53,8 @@ interface Payment {
   id: string;
   method: PayMethod;
   amount: number;
+  /** Só nas formas pendentes (boleto, crediário, transferência, cartão crédito). */
+  due_date?: string;
 }
 
 const PAY_LABELS: Record<PayMethod, string> = {
@@ -263,6 +266,11 @@ export default function QuickSaleTab({ onSold }: Props) {
   const paid = useMemo(() => payments.reduce((s, p) => s + p.amount, 0), [payments]);
   const remaining = Math.max(0, total - paid);
   const change = Math.max(0, paid - total);
+  // O que fica em Contas a receber (não entra no caixa agora).
+  const toReceive = useMemo(
+    () => payments.filter((p) => isPendingMethod(p.method)).reduce((s, p) => s + p.amount, 0),
+    [payments],
+  );
 
   function openCheckout() {
     if (cart.length === 0) {
@@ -281,7 +289,17 @@ export default function QuickSaleTab({ onSold }: Props) {
     ]);
   }
   function updatePayment(id: string, patch: Partial<Payment>) {
-    setPayments((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+    setPayments((prev) => prev.map((p) => {
+      if (p.id !== id) return p;
+      const next = { ...p, ...patch };
+      // Trocou a forma: pendente ganha vencimento sugerido; à vista perde.
+      if (patch.method && patch.method !== p.method) {
+        next.due_date = isPendingMethod(patch.method)
+          ? addDaysISO(DEFAULT_DUE_DAYS[patch.method])
+          : undefined;
+      }
+      return next;
+    }));
   }
   function removePayment(id: string) {
     setPayments((prev) => prev.filter((p) => p.id !== id));
@@ -312,6 +330,15 @@ export default function QuickSaleTab({ onSold }: Props) {
     if (!companyId || !user?.id || !session) return;
     if (Math.abs(paid - total) > 0.01 && paid < total) {
       toast({ title: "Pagamento insuficiente", description: `Falta ${formatBRL(remaining)}`, variant: "destructive" });
+      return;
+    }
+    const semVencimento = payments.find((p) => p.amount > 0 && isPendingMethod(p.method) && !p.due_date);
+    if (semVencimento) {
+      toast({
+        title: "Informe o vencimento",
+        description: `${PAY_LABELS[semVencimento.method]} fica em Contas a receber e precisa de data de vencimento.`,
+        variant: "destructive",
+      });
       return;
     }
     setFinishing(true);
@@ -356,15 +383,29 @@ export default function QuickSaleTab({ onSold }: Props) {
       if (itemsErr) throw new Error(itemsErr.message);
 
       // 3) pagamentos
+      //    À vista (dinheiro, pix, débito, outro): pago agora, entra neste caixa.
+      //    Boleto, crediário, transferência e cartão crédito: pendente até a baixa
+      //    em Contas a receber — não entra no caixa nem no Recebido antes disso.
       const paysPayload = payments
         .filter((p) => p.amount > 0)
-        .map((p) => ({
-          sale_id: saleId,
-          method: p.method,
-          status: "pago",
-          amount: p.amount,
-          paid_at: new Date().toISOString(),
-        }));
+        .map((p) =>
+          isPendingMethod(p.method)
+            ? {
+                sale_id: saleId,
+                method: p.method,
+                status: "pendente",
+                amount: p.amount,
+                due_date: p.due_date,
+              }
+            : {
+                sale_id: saleId,
+                method: p.method,
+                status: "pago",
+                amount: p.amount,
+                paid_at: new Date().toISOString(),
+                cash_session_id: session.id,
+              },
+        );
       if (paysPayload.length) {
         const { error: payErr } = await supabase.from("sale_payments" as any).insert(paysPayload as any);
         if (payErr) throw new Error(payErr.message);
@@ -390,7 +431,9 @@ export default function QuickSaleTab({ onSold }: Props) {
 
       toast({
         title: "Venda concluída! 🎉",
-        description: `Venda #${String((sale as any).number).padStart(6, "0")} — ${formatBRL(total)}`,
+        description: toReceive > 0.01
+          ? `Venda #${String((sale as any).number).padStart(6, "0")} — ${formatBRL(total)}. ${formatBRL(toReceive)} ficou em Contas a receber.`
+          : `Venda #${String((sale as any).number).padStart(6, "0")} — ${formatBRL(total)}`,
       });
 
       // reset
@@ -668,25 +711,42 @@ export default function QuickSaleTab({ onSold }: Props) {
               </div>
               <div className="space-y-2">
                 {payments.map((p) => (
-                  <div key={p.id} className="flex items-center gap-2">
-                    <select
-                      value={p.method}
-                      onChange={(e) => updatePayment(p.id, { method: e.target.value as PayMethod })}
-                      className="h-9 rounded-md border bg-background px-2 text-sm flex-1"
-                    >
-                      {(Object.keys(PAY_LABELS) as PayMethod[]).map((m) => (
-                        <option key={m} value={m}>{PAY_LABELS[m]}</option>
-                      ))}
-                    </select>
-                    <MoneyInput
-                      value={p.amount}
-                      onChange={(v) => updatePayment(p.id, { amount: v })}
-                      className="h-9 w-28 text-right"
-                    />
-                    {payments.length > 1 && (
-                      <button onClick={() => removePayment(p.id)} className="text-muted-foreground hover:text-destructive">
-                        <X className="h-4 w-4" />
-                      </button>
+                  <div key={p.id} className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={p.method}
+                        onChange={(e) => updatePayment(p.id, { method: e.target.value as PayMethod })}
+                        className="h-9 rounded-md border bg-background px-2 text-sm flex-1"
+                      >
+                        {(Object.keys(PAY_LABELS) as PayMethod[]).map((m) => (
+                          <option key={m} value={m}>{PAY_LABELS[m]}</option>
+                        ))}
+                      </select>
+                      <MoneyInput
+                        value={p.amount}
+                        onChange={(v) => updatePayment(p.id, { amount: v })}
+                        className="h-9 w-28 text-right"
+                      />
+                      {payments.length > 1 && (
+                        <button onClick={() => removePayment(p.id)} className="text-muted-foreground hover:text-destructive">
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                    {isPendingMethod(p.method) && (
+                      <div className="flex items-center gap-2 pl-1 text-xs text-muted-foreground">
+                        <span className="whitespace-nowrap">
+                          {p.method === "cartao_credito" ? "Repasse previsto" : "Vencimento"}
+                        </span>
+                        <Input
+                          type="date"
+                          value={p.due_date || ""}
+                          min={localISODate()}
+                          onChange={(e) => updatePayment(p.id, { due_date: e.target.value })}
+                          className="h-7 w-36 text-xs"
+                        />
+                        <span className="text-amber-400/90">fica a receber</span>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -696,7 +756,14 @@ export default function QuickSaleTab({ onSold }: Props) {
             {/* Resumo */}
             <div className="rounded-md bg-muted/40 p-3 text-sm space-y-1">
               <div className="flex justify-between"><span className="text-muted-foreground">Total</span><span className="font-mono">{formatBRL(total)}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Pago</span><span className="font-mono">{formatBRL(paid)}</span></div>
+              {toReceive > 0.01 ? (
+                <>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Recebido agora</span><span className="font-mono">{formatBRL(paid - toReceive)}</span></div>
+                  <div className="flex justify-between text-amber-400"><span>Fica a receber</span><span className="font-mono">{formatBRL(toReceive)}</span></div>
+                </>
+              ) : (
+                <div className="flex justify-between"><span className="text-muted-foreground">Pago</span><span className="font-mono">{formatBRL(paid)}</span></div>
+              )}
               {remaining > 0.01 && (
                 <div className="flex justify-between text-amber-400 font-semibold">
                   <span>Falta</span><span className="font-mono">{formatBRL(remaining)}</span>

@@ -31,6 +31,7 @@ import {
   Calculator,
   GraduationCap,
   ClipboardList,
+  HandCoins,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink } from "./NavLink";
@@ -43,6 +44,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useOnboarding } from "@/contexts/OnboardingContext";
 import { useSidebarCollapsed } from "@/hooks/useSidebarCollapsed";
 import { useAddon } from "@/hooks/useAddon";
+import { useReceivablesOverview } from "@/hooks/useReceivablesOverview";
 
 /* =========================================================
    NAVIGATION COM CONTROLE DE PAPEL
@@ -72,6 +74,8 @@ const navigation = [
   { name: "Catálogo",     href: "/services",       icon: Tags,         roles: ["admin", "gerente"], verticals: ["assistencia_tecnica"] },
   { name: "Fornecedores", href: "/suppliers",      icon: Truck,        roles: ["admin", "gerente"], verticals: ["assistencia_tecnica", "deposito_construcao"] },
   { name: "Compras",      href: "/purchases",      icon: PackageOpen,  roles: ["admin", "gerente"], verticals: ["assistencia_tecnica", "deposito_construcao"] },
+  // Núcleo (todos os ramos, sem add-on): badge = vencidos / vencendo hoje
+  { name: "Contas a receber", href: "/financeiro/receber", icon: HandCoins, badge: "receivables", roles: ["admin", "gerente", "financeiro"] },
   { name: "Contas fixas",   href: "/financeiro/fixas",      icon: CalendarClock, addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
   { name: "Contas variáveis", href: "/financeiro/variaveis", icon: Receipt,      addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
   { name: "Categorias fin.",href: "/financeiro/categorias", icon: Tags,          addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
@@ -474,6 +478,8 @@ useEffect(() => {
      FILTRO DE MENU POR PAPEL
   ========================================================= */
   const financeiroAddon = useAddon("financeiro");
+  const hasFinancialAccess = hasRole("admin") || hasRole("gerente") || hasRole("financeiro") || hasRole("super_admin");
+  const receivables = useReceivablesOverview(hasFinancialAccess);
   const currentVertical = (user as any)?.vertical || "assistencia_tecnica";
   const filteredNavigation = navigation.filter((item) => {
     if (!item.roles.some((role) => hasRole(role))) return false;
@@ -684,15 +690,31 @@ function openAgenda(taskId?: string) {
             );
           }
 
+          // Alerta de recebíveis: vermelho = vencidos, âmbar = só vencendo hoje.
+          const recvBadge = (item as any).badge === "receivables" && receivables
+            ? receivables.overdue_count > 0
+              ? { n: receivables.overdue_count, cls: "bg-red-500", tip: `${receivables.overdue_count} vencido(s)` }
+              : receivables.due_today_count > 0
+                ? { n: receivables.due_today_count, cls: "bg-amber-500", tip: `${receivables.due_today_count} vencendo hoje` }
+                : null
+            : null;
+
           return (
             <NavLink
               key={item.name}
               to={item.href}
-              title={item.name}
+              title={recvBadge ? `${item.name} — ${recvBadge.tip}` : item.name}
               className={`${itemBase} ${isHighlighted ? "ring-2 ring-primary ring-offset-1 ring-offset-sidebar" : ""}`}
               activeClassName={itemActive}
             >
-              <Icon className="h-5 w-5" />
+              <div className="relative">
+                <Icon className="h-5 w-5" />
+                {recvBadge && (
+                  <span className={`absolute -top-1 -right-1 h-4 min-w-[16px] rounded-full px-1 ${recvBadge.cls} text-white text-[10px] flex items-center justify-center`}>
+                    {recvBadge.n > 99 ? "99+" : recvBadge.n}
+                  </span>
+                )}
+              </div>
               <span className={lgShowInline}>{item.name}</span>
             </NavLink>
           );
