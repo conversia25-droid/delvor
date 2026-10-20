@@ -83,6 +83,9 @@ const Purchases = lazy(() => import("./pages/Purchases"));
 const PurchaseEditor = lazy(() => import("./pages/PurchaseEditor"));
 const Rentals = lazy(() => import("./pages/Rentals"));
 const RentalEditor = lazy(() => import("./pages/RentalEditor"));
+// --- Auto Escola ---
+const Students = lazy(() => import("./pages/Students"));
+const Enrollments = lazy(() => import("./pages/Enrollments"));
 const Placeholder = lazy(() => import("./pages/Placeholder"));
 // PWA mobile — app do técnico (e vendedor, quando combinado)
 const MobileLayout = lazy(() => import("./pages/mobile/MobileLayout"));
@@ -506,6 +509,9 @@ function AppContent() {
           <Route path="/purchases" element={<ProtectedRoute><ProtectedLayout><Purchases /></ProtectedLayout></ProtectedRoute>} />
           <Route path="/purchases/new" element={<ProtectedRoute><ProtectedLayout><PurchaseEditor /></ProtectedLayout></ProtectedRoute>} />
           <Route path="/purchases/:id" element={<ProtectedRoute><ProtectedLayout><PurchaseEditor /></ProtectedLayout></ProtectedRoute>} />
+          {/* --- Auto Escola --- */}
+          <Route path="/students" element={<ProtectedRoute><ProtectedLayout><Students /></ProtectedLayout></ProtectedRoute>} />
+          <Route path="/enrollments" element={<ProtectedRoute><ProtectedLayout><Enrollments /></ProtectedLayout></ProtectedRoute>} />
           <Route path="/rentals" element={<ProtectedRoute><ProtectedLayout><Rentals /></ProtectedLayout></ProtectedRoute>} />
           <Route path="/rentals/new" element={<ProtectedRoute><ProtectedLayout><RentalEditor /></ProtectedLayout></ProtectedRoute>} />
           <Route path="/rentals/:id" element={<ProtectedRoute><ProtectedLayout><RentalEditor /></ProtectedLayout></ProtectedRoute>} />

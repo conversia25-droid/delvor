@@ -29,6 +29,8 @@ import {
   CalendarClock,
   Receipt,
   Calculator,
+  GraduationCap,
+  ClipboardList,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink } from "./NavLink";
@@ -56,17 +58,20 @@ import { useAddon } from "@/hooks/useAddon";
  */
 const navigation = [
   { name: "Dashboard",    href: "/dashboard",      icon: Home,         roles: ["admin", "gerente", "vendedor", "tecnico", "user", "financeiro"] },
-  { name: "Clientes",     href: "/customers",      icon: Building2,    roles: ["admin", "gerente", "vendedor", "tecnico", "user"] },
+  { name: "Clientes",     href: "/customers",      icon: Building2,    roles: ["admin", "gerente", "vendedor", "tecnico", "user"], verticals: ["assistencia_tecnica", "deposito_construcao"] },
+  // --- Auto Escola ---
+  { name: "Alunos",       href: "/students",       icon: GraduationCap, roles: ["admin", "gerente", "vendedor", "tecnico", "user"], verticals: ["auto_escola"] },
+  { name: "Matrículas",   href: "/enrollments",    icon: ClipboardList, roles: ["admin", "gerente", "vendedor", "tecnico", "user"], verticals: ["auto_escola"] },
   { name: "Chat",         href: "/chat",           icon: MessageSquare, isChat: true, roles: ["admin", "gerente", "vendedor", "user"] },
-  { name: "OS",           href: "/service-orders", icon: Wrench,       roles: ["admin", "gerente", "vendedor", "tecnico", "user"] },
+  { name: "OS",           href: "/service-orders", icon: Wrench,       roles: ["admin", "gerente", "vendedor", "tecnico", "user"], verticals: ["assistencia_tecnica"] },
   { name: "Agenda",       href: "/schedule",       icon: Calendar,     roles: ["admin", "gerente", "vendedor", "tecnico", "user"] },
   { name: "PDV / Vendas", href: "/pdv",            icon: Wallet,       roles: ["admin", "gerente", "vendedor", "user"] },
   { name: "Orçamentos",   href: "/orcamentos",     icon: FileText,     roles: ["admin", "gerente", "vendedor", "user"] },
-  { name: "Locações",     href: "/rentals",        icon: Repeat,       roles: ["admin", "gerente", "vendedor", "tecnico", "user"] },
-  { name: "Estoque",      href: "/products",       icon: Package,      roles: ["admin", "gerente", "tecnico"] },
-  { name: "Catálogo",     href: "/services",       icon: Tags,         roles: ["admin", "gerente"] },
-  { name: "Fornecedores", href: "/suppliers",      icon: Truck,        roles: ["admin", "gerente"] },
-  { name: "Compras",      href: "/purchases",      icon: PackageOpen,  roles: ["admin", "gerente"] },
+  { name: "Locações",     href: "/rentals",        icon: Repeat,       roles: ["admin", "gerente", "vendedor", "tecnico", "user"], verticals: ["assistencia_tecnica"] },
+  { name: "Estoque",      href: "/products",       icon: Package,      roles: ["admin", "gerente", "tecnico"], verticals: ["assistencia_tecnica", "deposito_construcao"] },
+  { name: "Catálogo",     href: "/services",       icon: Tags,         roles: ["admin", "gerente"], verticals: ["assistencia_tecnica"] },
+  { name: "Fornecedores", href: "/suppliers",      icon: Truck,        roles: ["admin", "gerente"], verticals: ["assistencia_tecnica", "deposito_construcao"] },
+  { name: "Compras",      href: "/purchases",      icon: PackageOpen,  roles: ["admin", "gerente"], verticals: ["assistencia_tecnica", "deposito_construcao"] },
   { name: "Contas fixas",   href: "/financeiro/fixas",      icon: CalendarClock, addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
   { name: "Contas variáveis", href: "/financeiro/variaveis", icon: Receipt,      addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
   { name: "Categorias fin.",href: "/financeiro/categorias", icon: Tags,          addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
@@ -469,8 +474,12 @@ useEffect(() => {
      FILTRO DE MENU POR PAPEL
   ========================================================= */
   const financeiroAddon = useAddon("financeiro");
+  const currentVertical = (user as any)?.vertical || "assistencia_tecnica";
   const filteredNavigation = navigation.filter((item) => {
     if (!item.roles.some((role) => hasRole(role))) return false;
+    // Filtro por ramo (vertical). Item sem `verticals` aparece em todos os ramos.
+    const vs = (item as any).verticals as string[] | undefined;
+    if (vs && !vs.includes(currentVertical)) return false;
     // Esconder TV Wallboard para planos Starter e Pro
     if (item.href === "/tv/wallboard" && (planCode === "starter" || planCode === "pro")) return false;
     // Esconder itens de add-on quando o add-on não está ativo pra empresa

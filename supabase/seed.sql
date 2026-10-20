@@ -102,9 +102,85 @@ insert into storage.buckets (id, name, public)
 values ('product-images','product-images', true) on conflict (id) do nothing;
 
 -- =====================================================================
+-- 7) RAMO AUTO ESCOLA — empresa demo + dados + USUÁRIO DE TESTE (local)
+-- =====================================================================
+-- Empresa demo do ramo auto_escola
+insert into public.companies (id, name, cnpj, email, active, vertical)
+values (
+  '00000000-0000-0000-0000-000000000002'::uuid,
+  'Auto Escola Pilotto (Demo)',
+  '11.111.111/0001-11',
+  'demo@autoescola.local',
+  true,
+  'auto_escola'
+) on conflict (id) do update set vertical = 'auto_escola';
+
+-- Alunos de exemplo
+insert into public.students (id, company_id, name, cpf, phone, category_goal) values
+  ('00000000-0000-0000-0000-0000000a0001','00000000-0000-0000-0000-000000000002','Maria Oliveira Souza','041.882.117-30','(11) 90000-0001','B'),
+  ('00000000-0000-0000-0000-0000000a0002','00000000-0000-0000-0000-000000000002','João Pedro Santos','128.554.902-11','(11) 90000-0002','A'),
+  ('00000000-0000-0000-0000-0000000a0003','00000000-0000-0000-0000-000000000002','Ana Beatriz Lima','093.771.640-58','(11) 90000-0003','AB'),
+  ('00000000-0000-0000-0000-0000000a0004','00000000-0000-0000-0000-000000000002','Bruno Ferreira','200.318.475-96','(11) 90000-0004','D'),
+  ('00000000-0000-0000-0000-0000000a0005','00000000-0000-0000-0000-000000000002','Camila Rodrigues','315.007.228-40','(11) 90000-0005','B'),
+  ('00000000-0000-0000-0000-0000000a0006','00000000-0000-0000-0000-000000000002','Thiago Nunes','087.446.913-72','(11) 90000-0006','AB')
+on conflict (id) do nothing;
+
+-- Matrículas de exemplo (espalhadas pelo kanban)
+insert into public.enrollments (company_id, student_id, category, status, completed_theory_hours, completed_practice_hours, price) values
+  ('00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-0000000a0001','B','matriculado',0,0,1200),
+  ('00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-0000000a0003','AB','aulas_teoricas',28,0,1500),
+  ('00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-0000000a0002','A','prova_teorica',45,0,900),
+  ('00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-0000000a0004','D','aulas_praticas',45,8,1800),
+  ('00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-0000000a0005','B','aulas_praticas',45,14,1200),
+  ('00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-0000000a0006','AB','aprovado',45,20,1500)
+on conflict do nothing;
+
+-- Usuário de teste (login: autoescola@teste.local / senha: autoescola123)
+do $$
+declare
+  v_uid     uuid := '00000000-0000-0000-0000-0000000000aa';
+  v_company uuid := '00000000-0000-0000-0000-000000000002';
+  v_email   text := 'autoescola@teste.local';
+begin
+  if not exists (select 1 from auth.users where id = v_uid) then
+    insert into auth.users (
+      instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+      raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+    ) values (
+      '00000000-0000-0000-0000-000000000000', v_uid, 'authenticated', 'authenticated',
+      v_email, crypt('autoescola123', gen_salt('bf')), now(),
+      '{"provider":"email","providers":["email"]}'::jsonb,
+      jsonb_build_object('nome','Ricardo Pilotto'), now(), now()
+    );
+
+    insert into auth.identities (
+      id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+    ) values (
+      gen_random_uuid(), v_uid, v_uid::text,
+      jsonb_build_object('sub', v_uid::text, 'email', v_email), 'email', now(), now(), now()
+    );
+  end if;
+
+  -- handle_new_user já criou o profile; bootstrap_first_user pode tê-lo vinculado
+  -- à demo de assistência. Força o vínculo à AUTO ESCOLA e o papel de admin.
+  update public.profiles
+     set company_id = v_company, nome = 'Ricardo Pilotto', email = v_email
+   where id = v_uid;
+
+  delete from public.user_roles where user_id = v_uid;
+  insert into public.user_roles (user_id, role, company_id)
+  values (v_uid, 'admin'::public.app_role, v_company)
+  on conflict do nothing;
+end $$;
+
+-- =====================================================================
 -- USE:
---   1) Faça signup pela tela /login do app com qualquer email/senha
---   2) O trigger vincula você automaticamente à empresa "OSManager Demo"
---      como admin + super_admin (se for o primeiro user)
---   3) Pronto — entra no sistema e vai para Clientes.
+--   ASSISTÊNCIA TÉCNICA:
+--     1) Faça signup pela tela /login com qualquer email/senha
+--     2) O trigger te vincula à empresa "OSManager Demo" como admin
+--
+--   AUTO ESCOLA (usuário pronto pra testar):
+--     • Email: autoescola@teste.local
+--     • Senha: autoescola123
+--     • Abre já no ramo Auto Escola (menu Alunos / Matrículas)
 -- =====================================================================

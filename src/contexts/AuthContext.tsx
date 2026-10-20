@@ -15,6 +15,7 @@ type User = {
   roles: UserRole[];
   company_id: string | null;
   company_name?: string;
+  vertical?: string;
   theme?: ThemeMode;
 };
 
@@ -55,7 +56,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           company_id,
           theme,
           companies (
-            name
+            name,
+            vertical
           )
         `)
         .eq('id', supabaseUser.id)
@@ -75,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         roles: userRoles?.map((r) => r.role as UserRole) || ['user'],
         company_id: profile?.company_id || null,
         company_name: (profile?.companies as any)?.name || '',
+        vertical: (profile?.companies as any)?.vertical || 'assistencia_tecnica',
         theme: ((profile as any)?.theme || 'light') as ThemeMode,
       });
     } catch (error: any) {
