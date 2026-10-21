@@ -56,14 +56,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           company_id,
           theme,
           companies (
-            name,
-            vertical
+            name
           )
         `)
         .eq('id', supabaseUser.id)
         .single();
 
       if (profileError) throw profileError;
+
+      // Ramo da empresa em consulta separada e tolerante a falha: se o banco
+      // ainda não tem a coluna companies.vertical (migration 47), o login NÃO
+      // pode quebrar — cai no ramo padrão. (Incidente 2026-10-21: o select
+      // embutido derrubava o perfil inteiro e o menu sumia.)
+      let vertical = 'assistencia_tecnica';
+      if (profile?.company_id) {
+        try {
+          const { data: comp, error: vErr } = await supabase
+            .from('companies' as any)
+            .select('vertical')
+            .eq('id', profile.company_id)
+            .maybeSingle();
+          if (!vErr && (comp as any)?.vertical) vertical = (comp as any).vertical;
+        } catch {
+          /* mantém o padrão */
+        }
+      }
 
       const { data: userRoles } = await supabase
         .from('user_roles')
@@ -77,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         roles: userRoles?.map((r) => r.role as UserRole) || ['user'],
         company_id: profile?.company_id || null,
         company_name: (profile?.companies as any)?.name || '',
-        vertical: (profile?.companies as any)?.vertical || 'assistencia_tecnica',
+        vertical,
         theme: ((profile as any)?.theme || 'light') as ThemeMode,
       });
     } catch (error: any) {
