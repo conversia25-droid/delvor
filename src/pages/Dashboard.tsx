@@ -109,7 +109,7 @@ export default function Dashboard() {
   const today = localISODate();
 
   async function load() {
-    if (!companyId) return;
+    if (!companyId) { setLoading(false); return; }
     setLoading(true);
 
     // Vendas no período (RLS já filtra conforme o papel)
