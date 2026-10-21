@@ -74,8 +74,8 @@ export default function PDV() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Wallet className="h-7 w-7" /> PDV
+          <h1 className="text-[22px] font-semibold tracking-tight flex items-center gap-2">
+            <Wallet className="h-5 w-5 text-primary" /> PDV
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Controle de caixa e vendas no mesmo lugar.
@@ -287,7 +287,7 @@ function CashTab({ onOpened }: { onOpened?: () => void }) {
       <div className="space-y-6">
         <div className="max-w-md mx-auto mt-4 rounded-xl border bg-card p-6 text-center space-y-4">
           <div className="h-14 w-14 rounded-full bg-amber-500/15 ring-1 ring-amber-500/30 flex items-center justify-center mx-auto">
-            <Lock className="h-6 w-6 text-amber-400" />
+            <Lock className="h-6 w-6 text-amber-700 dark:text-amber-400" />
           </div>
           <div>
             <h2 className="text-lg font-semibold">Caixa fechado</h2>
@@ -357,7 +357,7 @@ function CashTab({ onOpened }: { onOpened?: () => void }) {
       <div className="rounded-lg border bg-card p-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="text-xs text-muted-foreground">Esperado em dinheiro no caixa</div>
-          <div className="text-2xl font-bold mt-1">{formatBRL(expectedCash)}</div>
+          <div className="text-2xl font-semibold tracking-tight mt-1">{formatBRL(expectedCash)}</div>
           <div className="text-[11px] text-muted-foreground mt-1">
             Fundo {formatBRL(session.opening_amount)} + Dinheiro {formatBRL(summary?.cash_in ?? 0)}
             {" "}+ Suprimentos {formatBRL(summary?.suprimentos ?? 0)}
@@ -396,7 +396,7 @@ function CashTab({ onOpened }: { onOpened?: () => void }) {
                   {m.reason && <span className="text-muted-foreground">— {m.reason}</span>}
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className={`font-mono font-semibold ${m.type === "suprimento" ? "text-emerald-400" : "text-rose-400"}`}>
+                  <span className={`font-mono font-semibold ${m.type === "suprimento" ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"}`}>
                     {m.type === "suprimento" ? "+" : "−"}{formatBRL(m.amount)}
                   </span>
                   <span className="text-[11px] text-muted-foreground">
@@ -490,8 +490,8 @@ function CashTab({ onOpened }: { onOpened?: () => void }) {
             {closeAmount && (
               <div className={`text-sm rounded-md p-2 ${
                 Math.abs(moneyInput(closeAmount) - expectedCash) < 0.01
-                  ? "bg-emerald-500/10 text-emerald-300"
-                  : "bg-amber-500/10 text-amber-300"
+                  ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                  : "bg-amber-500/10 text-amber-700 dark:text-amber-300"
               }`}>
                 Diferença: {formatBRL(moneyInput(closeAmount) - expectedCash)}
               </div>
@@ -516,9 +516,9 @@ function KpiCard({ icon: Icon, label, value, sub, tone }: {
   icon: any; label: string; value: string; sub?: string; tone?: string;
 }) {
   const toneClass: Record<string, string> = {
-    emerald: "text-emerald-400",
-    sky: "text-sky-400",
-    violet: "text-blue-400",
+    emerald: "text-emerald-700 dark:text-emerald-400",
+    sky: "text-sky-700 dark:text-sky-400",
+    violet: "text-blue-700 dark:text-blue-400",
   };
   return (
     <div className="rounded-lg border bg-card p-4">
@@ -605,8 +605,8 @@ function CloseResultCard({ result, onDismiss, vendorName, companyId }: {
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
             {ok
-              ? <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-              : <AlertTriangle className="h-5 w-5 text-amber-400" />}
+              ? <CheckCircle2 className="h-5 w-5 text-emerald-700 dark:text-emerald-400" />
+              : <AlertTriangle className="h-5 w-5 text-amber-700 dark:text-amber-400" />}
             <h3 className="font-semibold text-lg">
               {ok ? "Caixa fechado — conferido!" : "Caixa fechado com diferença"}
             </h3>
@@ -640,9 +640,9 @@ function CloseResultCard({ result, onDismiss, vendorName, companyId }: {
           Por forma de pagamento
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <PaymentBox icon={Banknote} color="text-emerald-400" label="Dinheiro" value={summary.cash_in} />
-          <PaymentBox icon={Smartphone} color="text-sky-400" label="PIX" value={summary.pix_in} />
-          <PaymentBox icon={CreditCard} color="text-blue-400" label="Cartão" value={summary.card_in} />
+          <PaymentBox icon={Banknote} color="text-emerald-700 dark:text-emerald-400" label="Dinheiro" value={summary.cash_in} />
+          <PaymentBox icon={Smartphone} color="text-sky-700 dark:text-sky-400" label="PIX" value={summary.pix_in} />
+          <PaymentBox icon={CreditCard} color="text-blue-700 dark:text-blue-400" label="Cartão" value={summary.card_in} />
           <PaymentBox icon={FileText} color="text-zinc-400" label="Outros" value={summary.other_in} />
         </div>
       </div>
@@ -657,13 +657,13 @@ function CloseResultCard({ result, onDismiss, vendorName, companyId }: {
             <span className="text-muted-foreground">Fundo de troco (abertura)</span>
             <span className="font-mono">{formatBRL(sessionSnapshot.opening_amount)}</span>
           </div>
-          <div className="flex justify-between text-emerald-300">
+          <div className="flex justify-between text-emerald-700 dark:text-emerald-300">
             <span className="flex items-center gap-1.5">
               <TrendingUp className="h-3.5 w-3.5" /> Suprimentos
             </span>
             <span className="font-mono">+ {formatBRL(summary.suprimentos)}</span>
           </div>
-          <div className="flex justify-between text-rose-300">
+          <div className="flex justify-between text-rose-700 dark:text-rose-300">
             <span className="flex items-center gap-1.5">
               <TrendingDown className="h-3.5 w-3.5" /> Sangrias
             </span>
@@ -689,7 +689,7 @@ function CloseResultCard({ result, onDismiss, vendorName, companyId }: {
           <div className="border-t border-border/40 pt-1.5 flex justify-between font-semibold">
             <span>Diferença</span>
             <span className={`font-mono ${
-              ok ? "text-emerald-400" : result.diff < 0 ? "text-rose-400" : "text-amber-400"
+              ok ? "text-emerald-700 dark:text-emerald-400" : result.diff < 0 ? "text-rose-700 dark:text-rose-400" : "text-amber-700 dark:text-amber-400"
             }`}>
               {result.diff >= 0 ? "+" : "−"} {formatBRL(Math.abs(result.diff))}
             </span>

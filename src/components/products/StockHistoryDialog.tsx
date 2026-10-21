@@ -31,13 +31,13 @@ interface StockHistoryDialogProps {
 }
 
 const MOVE_LABEL: Record<StockMoveType, { label: string; tone: string; icon: any; sign: 1 | -1 | 0 }> = {
-  entrada:        { label: "Entrada",          tone: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30", icon: ArrowUp,    sign: 1  },
-  saida:          { label: "Saída",            tone: "bg-rose-500/15 text-rose-300 ring-rose-500/30",          icon: ArrowDown,  sign: -1 },
-  ajuste:         { label: "Ajuste",           tone: "bg-amber-500/15 text-amber-300 ring-amber-500/30",        icon: Sliders,    sign: 0  },
-  transferencia:  { label: "Transferência",    tone: "bg-cyan-500/15 text-cyan-300 ring-cyan-500/30",          icon: ArrowDown,  sign: 0  },
-  reserva:        { label: "Reserva",          tone: "bg-blue-500/15 text-blue-300 ring-blue-500/30",     icon: Sliders,    sign: 0  },
-  baixa_os:       { label: "Baixa por OS",     tone: "bg-rose-500/15 text-rose-300 ring-rose-500/30",          icon: ArrowDown,  sign: -1 },
-  baixa_venda:    { label: "Baixa por venda",  tone: "bg-rose-500/15 text-rose-300 ring-rose-500/30",          icon: ArrowDown,  sign: -1 },
+  entrada:        { label: "Entrada",          tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 ring-emerald-500/30", icon: ArrowUp,    sign: 1  },
+  saida:          { label: "Saída",            tone: "bg-rose-500/15 text-rose-700 dark:text-rose-300 ring-rose-500/30",          icon: ArrowDown,  sign: -1 },
+  ajuste:         { label: "Ajuste",           tone: "bg-amber-500/15 text-amber-700 dark:text-amber-300 ring-amber-500/30",        icon: Sliders,    sign: 0  },
+  transferencia:  { label: "Transferência",    tone: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 ring-cyan-500/30",          icon: ArrowDown,  sign: 0  },
+  reserva:        { label: "Reserva",          tone: "bg-blue-500/15 text-blue-700 dark:text-blue-300 ring-blue-500/30",     icon: Sliders,    sign: 0  },
+  baixa_os:       { label: "Baixa por OS",     tone: "bg-rose-500/15 text-rose-700 dark:text-rose-300 ring-rose-500/30",          icon: ArrowDown,  sign: -1 },
+  baixa_venda:    { label: "Baixa por venda",  tone: "bg-rose-500/15 text-rose-700 dark:text-rose-300 ring-rose-500/30",          icon: ArrowDown,  sign: -1 },
 };
 
 function formatDateTime(iso: string) {
@@ -125,7 +125,7 @@ export default function StockHistoryDialog({
                         <Icon className="h-3 w-3 mr-1" /> {meta.label}
                       </Badge>
                     </TableCell>
-                    <TableCell className={`text-right font-mono ${signed < 0 ? "text-rose-400" : signed > 0 ? "text-emerald-400" : ""}`}>
+                    <TableCell className={`text-right font-mono ${signed < 0 ? "text-rose-700 dark:text-rose-400" : signed > 0 ? "text-emerald-700 dark:text-emerald-400" : ""}`}>
                       {signed > 0 ? "+" : ""}{signed} {product.unit}
                     </TableCell>
                     {canSeePricing && (

@@ -48,7 +48,7 @@ export default function CriticalOsList({ serviceOrders, limit = 8, title = "OS q
   return (
     <div className="rounded-lg border bg-card p-4">
       <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-        <AlertTriangle className="h-4 w-4 text-amber-400" /> {title}
+        <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400" /> {title}
       </h3>
       {critical.length === 0 ? (
         <div className="h-32 flex flex-col items-center justify-center text-sm text-muted-foreground gap-1">
@@ -77,7 +77,7 @@ export default function CriticalOsList({ serviceOrders, limit = 8, title = "OS q
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {overdue && (
-                    <span className="inline-flex items-center text-[10px] text-rose-400">
+                    <span className="inline-flex items-center text-[10px] text-rose-700 dark:text-rose-400">
                       <Clock className="h-3 w-3 mr-0.5" /> atraso
                     </span>
                   )}

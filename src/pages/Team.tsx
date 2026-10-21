@@ -73,11 +73,11 @@ type TeamMember = {
 };
 
 const ROLE_INFO: Record<AppRole, { label: string; description: string; icon: any; tone: string }> = {
-  super_admin: { label: "Super Admin", description: "Operador da plataforma Delvor",              icon: Crown,        tone: "bg-blue-500/15 text-blue-300 ring-blue-500/30" },
-  admin:       { label: "Admin",       description: "Acesso total, configurações, equipe",         icon: ShieldCheck,  tone: "bg-blue-500/15 text-blue-300 ring-blue-500/30" },
-  gerente:     { label: "Gerente",     description: "Vê tudo, gerencia equipe, sem configurações", icon: UserCog,      tone: "bg-amber-500/15 text-amber-300 ring-amber-500/30" },
-  vendedor:    { label: "Vendedor",    description: "Suas vendas + suas OS, atende WhatsApp",      icon: ShoppingCart, tone: "bg-sky-500/15 text-sky-300 ring-sky-500/30" },
-  tecnico:     { label: "Técnico",     description: "Só OS atribuídas a ele, executa serviços",    icon: Wrench,       tone: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30" },
+  super_admin: { label: "Super Admin", description: "Operador da plataforma Delvor",              icon: Crown,        tone: "bg-blue-500/15 text-blue-700 dark:text-blue-300 ring-blue-500/30" },
+  admin:       { label: "Admin",       description: "Acesso total, configurações, equipe",         icon: ShieldCheck,  tone: "bg-blue-500/15 text-blue-700 dark:text-blue-300 ring-blue-500/30" },
+  gerente:     { label: "Gerente",     description: "Vê tudo, gerencia equipe, sem configurações", icon: UserCog,      tone: "bg-amber-500/15 text-amber-700 dark:text-amber-300 ring-amber-500/30" },
+  vendedor:    { label: "Vendedor",    description: "Suas vendas + suas OS, atende WhatsApp",      icon: ShoppingCart, tone: "bg-sky-500/15 text-sky-700 dark:text-sky-300 ring-sky-500/30" },
+  tecnico:     { label: "Técnico",     description: "Só OS atribuídas a ele, executa serviços",    icon: Wrench,       tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 ring-emerald-500/30" },
   user:        { label: "Usuário",     description: "Papel legado (equivale a Vendedor)",          icon: UserIcon,     tone: "bg-zinc-500/15 text-zinc-300 ring-zinc-500/30" },
 };
 
@@ -298,8 +298,8 @@ export default function Team() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Users className="h-7 w-7" /> Equipe
+          <h1 className="text-[22px] font-semibold tracking-tight flex items-center gap-2">
+            <Users className="h-5 w-5 text-primary" /> Equipe
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Cadastre vendedores, técnicos e gestores. Cada papel vê e edita só o que precisa.

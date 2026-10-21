@@ -130,7 +130,7 @@ export default function OsHistory({ serviceOrderId, onNotifyCustomer }: OsHistor
                 <History className="h-3 w-3" />
                 {formatDateTime(h.created_at)}
                 {h.is_public && !isStatusChange && (
-                  <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-400">
+                  <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-700 dark:text-emerald-400">
                     Visível ao cliente
                   </Badge>
                 )}

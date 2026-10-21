@@ -47,6 +47,7 @@ import {
 
 import type { Product, ProductCategory, ProductType, Supplier } from "@/types/delvor";
 import { formatBRL } from "@/lib/formatters";
+import MiniBars, { shortBRL } from "@/components/charts/MiniBars";
 import { usePermissions } from "@/hooks/usePermissions";
 import ProductFormDialog from "@/components/products/ProductFormDialog";
 import StockAdjustDialog from "@/components/products/StockAdjustDialog";
@@ -62,11 +63,11 @@ const TYPE_LABEL: Record<ProductType, string> = {
 };
 
 const TYPE_TONE: Record<ProductType, string> = {
-  equipamento:    "bg-blue-500/15 text-blue-300 ring-blue-500/30",
-  suprimento:     "bg-sky-500/15 text-sky-300 ring-sky-500/30",
-  peca:           "bg-amber-500/15 text-amber-300 ring-amber-500/30",
+  equipamento:    "bg-blue-500/15 text-blue-700 dark:text-blue-300 ring-blue-500/30",
+  suprimento:     "bg-sky-500/15 text-sky-700 dark:text-sky-300 ring-sky-500/30",
+  peca:           "bg-amber-500/15 text-amber-700 dark:text-amber-300 ring-amber-500/30",
   acessorio:      "bg-zinc-500/15 text-zinc-300 ring-zinc-500/30",
-  servico_avulso: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
+  servico_avulso: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 ring-emerald-500/30",
 };
 
 function isForeignKeyViolation(error: { code?: string; message?: string } | null) {
@@ -139,6 +140,19 @@ export default function Products() {
     return { total, low, stockValue };
   }, [items]);
 
+  /* Dinheiro parado em estoque (custo × quantidade) por tipo de item. */
+  const valueByType = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of items) {
+      if (!p.active) continue;
+      const v = (p.cost_price || 0) * Math.max(0, p.stock_qty || 0);
+      m.set(p.type, (m.get(p.type) || 0) + v);
+    }
+    return [...m.entries()]
+      .map(([type, value]) => ({ key: type, label: (TYPE_LABEL as Record<string, string>)[type] || type, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [items]);
+
   function openNew() { setEditing(null); setFormOpen(true); }
   function openEdit(p: Product) { setEditing(p); setFormOpen(true); }
 
@@ -184,8 +198,8 @@ export default function Products() {
       {/* Cabeçalho */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Package className="h-7 w-7" /> Estoque
+          <h1 className="text-[22px] font-semibold tracking-tight flex items-center gap-2">
+            <Package className="h-5 w-5 text-primary" /> Estoque
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Impressoras, suprimentos, peças e periféricos. Movimente o estoque pelo botão de ajuste.
@@ -205,7 +219,7 @@ export default function Products() {
           <div className="text-xs text-muted-foreground flex items-center gap-1">
             <Boxes className="h-3 w-3" /> Produtos cadastrados
           </div>
-          <div className="text-2xl font-bold mt-1">{stats.total}</div>
+          <div className="text-2xl font-semibold tracking-tight mt-1">{stats.total}</div>
         </div>
         <button
           type="button"
@@ -217,15 +231,26 @@ export default function Products() {
           <div className="text-xs text-muted-foreground flex items-center gap-1">
             <AlertTriangle className="h-3 w-3" /> Estoque baixo {onlyLowStock && "(filtrado)"}
           </div>
-          <div className="text-2xl font-bold mt-1 text-amber-400">{stats.low}</div>
+          <div className="text-2xl font-semibold tracking-tight mt-1 text-amber-700 dark:text-amber-400">{stats.low}</div>
         </button>
         {canSeePricing && (
           <div className="rounded-lg border bg-card p-4">
             <div className="text-xs text-muted-foreground">Valor em estoque (custo)</div>
-            <div className="text-2xl font-bold mt-1">{formatBRL(stats.stockValue)}</div>
+            <div className="text-2xl font-semibold tracking-tight mt-1">{formatBRL(stats.stockValue)}</div>
           </div>
         )}
       </div>
+
+      {canSeePricing && valueByType.length > 1 && (
+        <MiniBars
+          title="Valor parado em estoque"
+          sub="por tipo de item, a preço de custo"
+          data={valueByType}
+          format={shortBRL}
+          height={150}
+          showValues
+        />
+      )}
 
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-3">
@@ -323,8 +348,8 @@ export default function Products() {
                   )}
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1.5">
-                      {isLow && <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />}
-                      <span className={`font-mono ${isLow ? "text-amber-400 font-medium" : ""}`}>
+                      {isLow && <AlertTriangle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />}
+                      <span className={`font-mono ${isLow ? "text-amber-700 dark:text-amber-400 font-medium" : ""}`}>
                         {p.stock_qty} {p.unit}
                       </span>
                     </div>

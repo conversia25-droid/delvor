@@ -37,6 +37,7 @@ import {
 import type { Sale, SaleStatus } from "@/types/delvor";
 import { SALE_STATUS_LABELS } from "@/types/delvor";
 import { formatBRL, formatDateBR } from "@/lib/formatters";
+import MiniBars, { shortBRL, type MiniBar } from "@/components/charts/MiniBars";
 
 type PendingPayment = {
   status: string;
@@ -233,12 +234,49 @@ export default function Sales({ embedded = false, mode = "vendas" }: SalesProps 
     return { open, invoiced: invoiced.length, periodRevenue, avgTicket };
   }, [allSalesForStats, periodStartISO, isOrcamentos]);
 
+  /* Vendido ao longo do período: por dia até ~3 meses, por mês acima disso. */
+  const soldSeries = useMemo<{ data: MiniBar[]; byMonth: boolean }>(() => {
+    const inv = allSalesForStats.filter(
+      (s) => (s.status === "faturado" || s.status === "entregue") && (!periodStartISO || s.issue_date >= periodStartISO),
+    );
+    const dates = inv.map((s) => s.issue_date.slice(0, 10)).sort();
+    if (!dates.length) return { data: [], byMonth: false };
+    const first = periodStartISO || dates[0];
+    const spanDays = (Date.now() - new Date(first + "T12:00:00").getTime()) / 86_400_000;
+    const byMonth = spanDays > 95;
+    const sums = new Map<string, number>();
+    for (const s of inv) {
+      const k = byMonth ? s.issue_date.slice(0, 7) : s.issue_date.slice(0, 10);
+      sums.set(k, (sums.get(k) || 0) + Number(s.total ?? 0));
+    }
+    // preenche os buracos pra não esconder dia/mês sem venda
+    const keys: string[] = [];
+    const cur = new Date(first + "T12:00:00");
+    const end = new Date();
+    if (byMonth) cur.setDate(1);
+    while (cur <= end) {
+      const iso = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`;
+      keys.push(byMonth ? iso.slice(0, 7) : iso);
+      if (byMonth) cur.setMonth(cur.getMonth() + 1); else cur.setDate(cur.getDate() + 1);
+    }
+    const MES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+    return {
+      byMonth,
+      data: keys.map((k) => ({
+        key: k,
+        label: byMonth ? `${MES[Number(k.slice(5, 7)) - 1]}/${k.slice(2, 4)}` : `${k.slice(8, 10)}/${k.slice(5, 7)}`,
+        detail: byMonth ? `${MES[Number(k.slice(5, 7)) - 1]} de ${k.slice(0, 4)}` : `${k.slice(8, 10)}/${k.slice(5, 7)}/${k.slice(0, 4)}`,
+        value: sums.get(k) || 0,
+      })),
+    };
+  }, [allSalesForStats, periodStartISO]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         {!embedded && (
           <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
+            <h1 className="text-[22px] font-semibold tracking-tight flex items-center gap-2">
               {isOrcamentos ? <FileText className="h-7 w-7" /> : <ShoppingCart className="h-7 w-7" />}
               {isOrcamentos ? "Orçamentos" : "Vendas"}
             </h1>
@@ -269,25 +307,36 @@ export default function Sales({ embedded = false, mode = "vendas" }: SalesProps 
           <div className="text-xs text-muted-foreground flex items-center gap-1">
             <FileText className="h-3 w-3" /> {isOrcamentos ? `Orçamentos (${PERIOD_LABELS[period].toLowerCase()})` : "Em aberto"}
           </div>
-          <div className="text-2xl font-bold mt-1">{stats.open}</div>
+          <div className="text-2xl font-semibold tracking-tight mt-1">{stats.open}</div>
         </div>
         {!isOrcamentos && (
           <div className="rounded-lg border bg-card p-4">
             <div className="text-xs text-muted-foreground flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Faturadas</div>
-            <div className="text-2xl font-bold mt-1">{stats.invoiced}</div>
+            <div className="text-2xl font-semibold tracking-tight mt-1">{stats.invoiced}</div>
           </div>
         )}
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs text-muted-foreground flex items-center gap-1">
-            <TrendingUp className="h-3 w-3" /> {isOrcamentos ? `Valor total` : `Faturamento (${PERIOD_LABELS[period].toLowerCase()})`}
+            <TrendingUp className="h-3 w-3" /> {isOrcamentos ? `Valor total` : `Vendido (${PERIOD_LABELS[period].toLowerCase()})`}
           </div>
-          <div className="text-2xl font-bold mt-1 text-emerald-400">{formatBRL(stats.periodRevenue)}</div>
+          <div className="text-2xl font-semibold tracking-tight mt-1 text-emerald-700 dark:text-emerald-400">{formatBRL(stats.periodRevenue)}</div>
         </div>
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs text-muted-foreground">Ticket médio</div>
-          <div className="text-2xl font-bold mt-1">{formatBRL(stats.avgTicket)}</div>
+          <div className="text-2xl font-semibold tracking-tight mt-1">{formatBRL(stats.avgTicket)}</div>
         </div>
       </div>
+
+      {!isOrcamentos && (
+        <MiniBars
+          title={soldSeries.byMonth ? "Vendido por mês" : "Vendido por dia"}
+          sub={PERIOD_LABELS[period].toLowerCase()}
+          data={soldSeries.data}
+          format={shortBRL}
+          height={160}
+          empty="Nenhuma venda faturada no período."
+        />
+      )}
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[260px] max-w-xl">
@@ -370,7 +419,7 @@ export default function Sales({ embedded = false, mode = "vendas" }: SalesProps 
                   <TableCell className="text-right">
                     {pending ? (
                       <div className="flex flex-col items-end">
-                        <span className={`font-mono font-semibold ${pending.overdue ? "text-rose-400" : "text-amber-400"}`}>
+                        <span className={`font-mono font-semibold ${pending.overdue ? "text-rose-700 dark:text-rose-400" : "text-amber-700 dark:text-amber-400"}`}>
                           {formatBRL(pending.amount)}
                         </span>
                         <span className="text-[10px] text-muted-foreground">

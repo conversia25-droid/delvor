@@ -465,7 +465,7 @@ export default function QuickSaleTab({ onSold }: Props) {
     return (
       <div className="max-w-md mx-auto mt-4 rounded-xl border bg-card p-6 text-center space-y-4">
         <div className="h-14 w-14 rounded-full bg-amber-500/15 ring-1 ring-amber-500/30 flex items-center justify-center mx-auto">
-          <Lock className="h-6 w-6 text-amber-400" />
+          <Lock className="h-6 w-6 text-amber-700 dark:text-amber-400" />
         </div>
         <div>
           <h3 className="text-lg font-semibold">Abra o caixa pra vender</h3>
@@ -540,12 +540,12 @@ export default function QuickSaleTab({ onSold }: Props) {
                 onClick={() => addToCart(r)}
                 onMouseEnter={() => setSelIdx(idx)}
                 className={`w-full text-left px-3 py-2.5 flex items-center justify-between gap-3 transition ${
-                  idx === selIdx ? "bg-blue-500/15 ring-1 ring-inset ring-blue-500/30" : "hover:bg-white/[0.03]"
+                  idx === selIdx ? "bg-accent ring-1 ring-inset ring-primary/30" : "hover:bg-accent/50"
                 }`}
               >
                 <div className="flex items-center gap-2 min-w-0">
                   <div className={`h-8 w-8 rounded flex items-center justify-center shrink-0 ${
-                    r.kind === "produto" ? "bg-blue-500/15 text-blue-300" : "bg-sky-500/15 text-sky-300"
+                    r.kind === "produto" ? "bg-primary/10 text-primary" : "bg-sky-500/15 text-sky-700 dark:text-sky-300"
                   }`}>
                     {r.kind === "produto" ? <Package className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
                   </div>
@@ -554,7 +554,7 @@ export default function QuickSaleTab({ onSold }: Props) {
                     <div className="text-[11px] text-muted-foreground">
                       {r.sku && <span className="font-mono">{r.sku}</span>}
                       {r.kind === "produto" && r.stock != null && (
-                        <span className={r.stock <= 0 ? "text-rose-400 ml-2" : "ml-2"}>
+                        <span className={r.stock <= 0 ? "text-rose-700 dark:text-rose-400 ml-2" : "ml-2"}>
                           estoque: {r.stock}
                         </span>
                       )}
@@ -601,7 +601,7 @@ export default function QuickSaleTab({ onSold }: Props) {
                     <div className="min-w-0">
                       <div className="text-sm font-medium truncate">{c.name}</div>
                       {c.kind === "produto" && c.stock != null && c.qty > c.stock && (
-                        <div className="text-[10px] text-amber-400">⚠ qtd acima do estoque ({c.stock})</div>
+                        <div className="text-[10px] text-amber-700 dark:text-amber-400">⚠ qtd acima do estoque ({c.stock})</div>
                       )}
                     </div>
                     <button onClick={() => removeItem(c.key)} className="text-muted-foreground hover:text-destructive shrink-0">
@@ -655,7 +655,7 @@ export default function QuickSaleTab({ onSold }: Props) {
           </div>
           <div className="flex justify-between text-lg font-bold pt-1 border-t">
             <span>Total</span>
-            <span className="font-mono text-emerald-400">{formatBRL(total)}</span>
+            <span className="font-mono text-emerald-700 dark:text-emerald-400">{formatBRL(total)}</span>
           </div>
           <Button
             id="pdv-finalizar"
@@ -745,7 +745,7 @@ export default function QuickSaleTab({ onSold }: Props) {
                           onChange={(e) => updatePayment(p.id, { due_date: e.target.value })}
                           className="h-7 w-36 text-xs"
                         />
-                        <span className="text-amber-400/90">fica a receber</span>
+                        <span className="text-amber-700/90 dark:text-amber-400/90">fica a receber</span>
                       </div>
                     )}
                   </div>
@@ -759,18 +759,18 @@ export default function QuickSaleTab({ onSold }: Props) {
               {toReceive > 0.01 ? (
                 <>
                   <div className="flex justify-between"><span className="text-muted-foreground">Recebido agora</span><span className="font-mono">{formatBRL(paid - toReceive)}</span></div>
-                  <div className="flex justify-between text-amber-400"><span>Fica a receber</span><span className="font-mono">{formatBRL(toReceive)}</span></div>
+                  <div className="flex justify-between text-amber-700 dark:text-amber-400"><span>Fica a receber</span><span className="font-mono">{formatBRL(toReceive)}</span></div>
                 </>
               ) : (
                 <div className="flex justify-between"><span className="text-muted-foreground">Pago</span><span className="font-mono">{formatBRL(paid)}</span></div>
               )}
               {remaining > 0.01 && (
-                <div className="flex justify-between text-amber-400 font-semibold">
+                <div className="flex justify-between text-amber-700 dark:text-amber-400 font-semibold">
                   <span>Falta</span><span className="font-mono">{formatBRL(remaining)}</span>
                 </div>
               )}
               {change > 0.01 && (
-                <div className="flex justify-between text-emerald-400 font-semibold">
+                <div className="flex justify-between text-emerald-700 dark:text-emerald-400 font-semibold">
                   <span>Troco</span><span className="font-mono">{formatBRL(change)}</span>
                 </div>
               )}

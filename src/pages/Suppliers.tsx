@@ -235,8 +235,8 @@ export default function Suppliers() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Truck className="h-7 w-7" /> Fornecedores
+          <h1 className="text-[22px] font-semibold tracking-tight flex items-center gap-2">
+            <Truck className="h-5 w-5 text-primary" /> Fornecedores
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Cadastro de fornecedores de impressoras, suprimentos e peças.
@@ -289,7 +289,7 @@ export default function Suppliers() {
                 <div>
                   <Label className="flex items-center gap-1.5">
                     CNPJ
-                    {cnpjLoading && <Loader2 className="h-3 w-3 animate-spin text-blue-400" />}
+                    {cnpjLoading && <Loader2 className="h-3 w-3 animate-spin text-blue-700 dark:text-blue-400" />}
                   </Label>
                   <Input
                     value={form.document}
@@ -402,7 +402,7 @@ export default function Suppliers() {
                 </TableCell>
                 <TableCell>
                   {s.active
-                    ? <Badge className="bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30 hover:bg-emerald-500/25">Ativo</Badge>
+                    ? <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-500/30 hover:bg-emerald-500/25">Ativo</Badge>
                     : <Badge variant="secondary">Inativo</Badge>}
                 </TableCell>
                 <TableCell className="text-right">

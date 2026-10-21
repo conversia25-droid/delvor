@@ -132,7 +132,7 @@ export default function OsStatusTransitionDialog({
             </div>
 
             {!phone && (
-              <div className="text-xs text-amber-400">
+              <div className="text-xs text-amber-700 dark:text-amber-400">
                 Cliente sem telefone/WhatsApp cadastrado.
               </div>
             )}

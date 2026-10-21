@@ -38,7 +38,7 @@ export default function Help() {
           </Badge>
           <Badge variant="outline">Orientações do sistema</Badge>
         </div>
-        <h1 className="text-3xl font-bold tracking-tight">Ajuda</h1>
+        <h1 className="text-[22px] font-semibold tracking-tight">Ajuda</h1>
         <p className="max-w-3xl text-sm text-muted-foreground">
           Consulte as orientações principais do sistema. Quando precisar de atendimento, use o agente de suporte no canto inferior direito da tela.
         </p>

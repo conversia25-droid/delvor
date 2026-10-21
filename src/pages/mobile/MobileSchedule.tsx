@@ -270,10 +270,10 @@ const TONE_RING: Record<string, string> = {
   zinc:    "ring-zinc-500/30 bg-zinc-500/5",
 };
 const TONE_TEXT: Record<string, string> = {
-  rose:    "text-rose-300",
-  violet:  "text-blue-300",
-  sky:     "text-sky-300",
-  emerald: "text-emerald-300",
+  rose:    "text-rose-700 dark:text-rose-300",
+  violet:  "text-blue-700 dark:text-blue-300",
+  sky:     "text-sky-700 dark:text-sky-300",
+  emerald: "text-emerald-700 dark:text-emerald-300",
   zinc:    "text-zinc-300",
 };
 
@@ -337,8 +337,8 @@ function EventRow({ ev, onClick }: { ev: ScheduleEvent; onClick: () => void }) {
           <Badge
             className={`text-[10px] px-1.5 py-0 ring-1 ${
               isVisita
-                ? "bg-sky-500/15 text-sky-300 ring-sky-500/30"
-                : "bg-amber-500/15 text-amber-300 ring-amber-500/30"
+                ? "bg-sky-500/15 text-sky-700 dark:text-sky-300 ring-sky-500/30"
+                : "bg-amber-500/15 text-amber-700 dark:text-amber-300 ring-amber-500/30"
             }`}
           >
             {isVisita ? (

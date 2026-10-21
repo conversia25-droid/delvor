@@ -11,7 +11,7 @@ interface TopSellersProps {
   }>;
 }
 
-const MEDAL_TONE = ["text-amber-400", "text-zinc-300", "text-orange-400"];
+const MEDAL_TONE = ["text-amber-700 dark:text-amber-400", "text-zinc-300", "text-orange-700 dark:text-orange-400"];
 
 export default function TopSellers({ items }: TopSellersProps) {
   const top = items.slice(0, 5);
@@ -20,7 +20,7 @@ export default function TopSellers({ items }: TopSellersProps) {
   return (
     <div className="rounded-lg border bg-card p-4">
       <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-        <Medal className="h-4 w-4 text-amber-400" /> Ranking de vendedores
+        <Medal className="h-4 w-4 text-amber-700 dark:text-amber-400" /> Ranking de vendedores
       </h3>
       {top.length === 0 ? (
         <div className="h-32 flex items-center justify-center text-sm text-muted-foreground">

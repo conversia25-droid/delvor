@@ -504,7 +504,7 @@ export default function MobileSaleEditor() {
           )}
         </div>
         {savedFlash && (
-          <div className="text-[11px] text-emerald-400 flex items-center gap-1">
+          <div className="text-[11px] text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
             <Check className="h-3 w-3" /> Salvo
           </div>
         )}
@@ -575,7 +575,7 @@ export default function MobileSaleEditor() {
                         className="w-full text-left p-3 active:bg-muted/30 transition flex items-center gap-3"
                       >
                         <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${
-                          it.product_id ? "bg-amber-500/15 text-amber-300" : "bg-sky-500/15 text-sky-300"
+                          it.product_id ? "bg-amber-500/15 text-amber-700 dark:text-amber-300" : "bg-sky-500/15 text-sky-700 dark:text-sky-300"
                         }`}>
                           {it.product_id ? <Package className="h-4 w-4" /> : <Wrench className="h-4 w-4" />}
                         </div>
@@ -583,7 +583,7 @@ export default function MobileSaleEditor() {
                           <div className="text-sm font-medium truncate">{it.description}</div>
                           <div className="text-[11px] text-muted-foreground">
                             {it.qty}× {formatBRL(it.unit_price)}
-                            {it.discount > 0 && <span className="text-rose-400"> · −{formatBRL(it.discount)}</span>}
+                            {it.discount > 0 && <span className="text-rose-700 dark:text-rose-400"> · −{formatBRL(it.discount)}</span>}
                           </div>
                         </div>
                         <div className="text-sm font-mono font-semibold shrink-0">{formatBRL(subtotalLine)}</div>
@@ -686,8 +686,8 @@ export default function MobileSaleEditor() {
                               <span>venc. {formatDateBR(p.due_date)}</span>
                             )}
                             <Badge variant="outline" className={`text-[9px] px-1 py-0 ${
-                              p.status === "pago" ? "text-emerald-400 border-emerald-500/30" :
-                              p.status === "atrasado" ? "text-rose-400 border-rose-500/30" :
+                              p.status === "pago" ? "text-emerald-700 dark:text-emerald-400 border-emerald-500/30" :
+                              p.status === "atrasado" ? "text-rose-700 dark:text-rose-400 border-rose-500/30" :
                               "text-muted-foreground"
                             }`}>
                               {p.status}
@@ -706,7 +706,7 @@ export default function MobileSaleEditor() {
                       <div className="text-right ml-auto">
                         <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Pago / Total</div>
                         <div className="font-mono text-xs">
-                          <span className="text-emerald-400 font-semibold">{formatBRL(paidSum)}</span>
+                          <span className="text-emerald-700 dark:text-emerald-400 font-semibold">{formatBRL(paidSum)}</span>
                           {" / "}{formatBRL(paymentsSum)}
                         </div>
                       </div>
@@ -714,7 +714,7 @@ export default function MobileSaleEditor() {
                   </div>
                 )}
                 {payments.length > 0 && Math.abs(paymentsSum - total) > 0.01 && (
-                  <div className={`text-[11px] ${paymentsSum < total ? "text-amber-400" : "text-rose-400"}`}>
+                  <div className={`text-[11px] ${paymentsSum < total ? "text-amber-700 dark:text-amber-400" : "text-rose-700 dark:text-rose-400"}`}>
                     {paymentsSum < total
                       ? `Faltam ${formatBRL(total - paymentsSum)} pra cobrir o total.`
                       : `Pagamentos excedem o total em ${formatBRL(paymentsSum - total)}.`}
@@ -855,7 +855,7 @@ function ItemEditorSheet({
             <span className="font-mono font-bold">{formatBRL(parseNum(qty) * parseNum(price) - parseNum(discount))}</span>
           </div>
           <div className="flex gap-2 pt-2">
-            <Button variant="outline" size="lg" onClick={onRemove} className="text-rose-400 border-rose-500/30 hover:bg-rose-500/10">
+            <Button variant="outline" size="lg" onClick={onRemove} className="text-rose-700 dark:text-rose-400 border-rose-500/30 hover:bg-rose-500/10">
               <Trash2 className="h-4 w-4 mr-1.5" /> Remover
             </Button>
             <Button size="lg" className="flex-1" onClick={() => onSave({
@@ -961,7 +961,7 @@ function PaymentEditorSheet({
           </div>
           <div className="flex gap-2 pt-2">
             {!isNew && (
-              <Button variant="outline" size="lg" onClick={onRemove} className="text-rose-400 border-rose-500/30 hover:bg-rose-500/10">
+              <Button variant="outline" size="lg" onClick={onRemove} className="text-rose-700 dark:text-rose-400 border-rose-500/30 hover:bg-rose-500/10">
                 <Trash2 className="h-4 w-4 mr-1.5" /> Remover
               </Button>
             )}

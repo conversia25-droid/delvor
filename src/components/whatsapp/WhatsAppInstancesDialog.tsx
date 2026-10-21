@@ -538,9 +538,9 @@ export default function WhatsAppInstancesDialog({ open, onOpenChange }: Props) {
                   >
                     <div className="flex items-start gap-3 min-w-0 flex-1">
                       <div className={`rounded-full h-10 w-10 flex items-center justify-center shrink-0 mt-0.5
-                        ${inst.status === "connected" ? "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30" :
-                          trackable ? "bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/30" :
-                          "bg-rose-500/15 text-rose-400 ring-1 ring-rose-500/30"}`}>
+                        ${inst.status === "connected" ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-500/30" :
+                          trackable ? "bg-amber-500/15 text-amber-700 dark:text-amber-400 ring-1 ring-amber-500/30" :
+                          "bg-rose-500/15 text-rose-700 dark:text-rose-400 ring-1 ring-rose-500/30"}`}>
                         {inst.status === "connected" ? <CheckCircle2 className="h-5 w-5" />
                           : trackable ? <QrCode className="h-5 w-5" />
                           : <AlertTriangle className="h-5 w-5" />}
@@ -584,7 +584,7 @@ export default function WhatsAppInstancesDialog({ open, onOpenChange }: Props) {
                           {inst.instance_name}
                         </div>
                         {inst.connected_phone && (
-                          <div className="text-xs text-emerald-300 font-mono mt-0.5">
+                          <div className="text-xs text-emerald-700 dark:text-emerald-300 font-mono mt-0.5">
                             +{inst.connected_phone}
                             {inst.connected_name && <span className="text-muted-foreground"> · {inst.connected_name}</span>}
                           </div>
@@ -756,9 +756,9 @@ export default function WhatsAppInstancesDialog({ open, onOpenChange }: Props) {
             {!qrLoading && qrSuccess && (
               <div className="flex flex-col items-center gap-3 py-8">
                 <div className="rounded-full bg-emerald-100/10 ring-1 ring-emerald-500/30 p-3">
-                  <CheckCircle2 className="h-10 w-10 text-emerald-400" />
+                  <CheckCircle2 className="h-10 w-10 text-emerald-700 dark:text-emerald-400" />
                 </div>
-                <p className="font-semibold text-emerald-300">Conectado!</p>
+                <p className="font-semibold text-emerald-700 dark:text-emerald-300">Conectado!</p>
                 <p className="text-sm text-muted-foreground">Fechando...</p>
               </div>
             )}

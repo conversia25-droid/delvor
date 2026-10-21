@@ -1168,7 +1168,7 @@ export default function SaleEditor() {
                   </span> · primeira em <span className="text-foreground">{installFirstDate.split("-").reverse().join("/")}</span> · cada {installInterval} dias
                 </div>
               ) : (
-                <div className="text-rose-400 text-xs mt-0.5">Não há valor restante (todas as parcelas já cobrem o total).</div>
+                <div className="text-rose-700 dark:text-rose-400 text-xs mt-0.5">Não há valor restante (todas as parcelas já cobrem o total).</div>
               )}
             </div>
           </div>

@@ -126,7 +126,7 @@ export default function QuickSupplierDialog({
           <div>
             <Label className="flex items-center gap-1.5">
               CNPJ
-              {cnpjLoading && <Loader2 className="h-3 w-3 animate-spin text-blue-400" />}
+              {cnpjLoading && <Loader2 className="h-3 w-3 animate-spin text-blue-700 dark:text-blue-400" />}
             </Label>
             <Input
               value={document}

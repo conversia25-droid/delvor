@@ -13,12 +13,21 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ["\"IBM Plex Sans\"", "system-ui", "-apple-system", "\"Segoe UI\"", "Roboto", "sans-serif"],
+        mono: ["\"IBM Plex Mono\"", "ui-monospace", "\"Cascadia Code\"", "Menlo", "monospace"],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        chart: {
+          1: "hsl(var(--chart-1))",
+          2: "hsl(var(--chart-2))",
+          grid: "hsl(var(--chart-grid))",
+        },
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",

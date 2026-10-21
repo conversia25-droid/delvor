@@ -40,6 +40,7 @@ import {
 import type { Purchase, PurchaseStatus } from "@/types/delvor";
 import { PURCHASE_STATUS_LABELS } from "@/types/delvor";
 import { formatBRL, formatDateBR } from "@/lib/formatters";
+import MiniBars, { shortBRL } from "@/components/charts/MiniBars";
 
 type PurchaseRow = Purchase & {
   suppliers?: { name: string } | null;
@@ -90,6 +91,28 @@ export default function Purchases() {
     });
   }, [items, search, filterStatus]);
 
+  /* Gasto com compras recebidas, últimos 6 meses. */
+  const spendByMonth = useMemo(() => {
+    const MES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+    const now = new Date();
+    const keys = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    });
+    const sums = new Map<string, number>();
+    for (const p of items) {
+      if (p.status !== "recebida" || !p.receive_date) continue;
+      const k = String(p.receive_date).slice(0, 7);
+      sums.set(k, (sums.get(k) || 0) + (p.total || 0));
+    }
+    return keys.map((k) => ({
+      key: k,
+      label: `${MES[Number(k.slice(5, 7)) - 1]}/${k.slice(2, 4)}`,
+      detail: `${MES[Number(k.slice(5, 7)) - 1]} de ${k.slice(0, 4)}`,
+      value: sums.get(k) || 0,
+    }));
+  }, [items]);
+
   const stats = useMemo(() => {
     const monthStart = new Date();
     monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
@@ -117,8 +140,8 @@ export default function Purchases() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Truck className="h-7 w-7" /> Compras
+          <h1 className="text-[22px] font-semibold tracking-tight flex items-center gap-2">
+            <Truck className="h-5 w-5 text-primary" /> Compras
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Entrada de mercadoria de fornecedores. Receber dispara entrada automática no estoque.
@@ -139,21 +162,31 @@ export default function Purchases() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs text-muted-foreground flex items-center gap-1"><FileText className="h-3 w-3" /> Em aberto</div>
-          <div className="text-2xl font-bold mt-1">{stats.open}</div>
+          <div className="text-2xl font-semibold tracking-tight mt-1">{stats.open}</div>
         </div>
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs text-muted-foreground flex items-center gap-1"><PackageOpen className="h-3 w-3" /> Recebidas no mês</div>
-          <div className="text-2xl font-bold mt-1 text-emerald-400">{stats.receivedMonthCount}</div>
+          <div className="text-2xl font-semibold tracking-tight mt-1 text-emerald-700 dark:text-emerald-400">{stats.receivedMonthCount}</div>
         </div>
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs text-muted-foreground flex items-center gap-1"><TrendingDown className="h-3 w-3" /> Gasto no mês</div>
-          <div className="text-2xl font-bold mt-1">{formatBRL(stats.monthSpend)}</div>
+          <div className="text-2xl font-semibold tracking-tight mt-1">{formatBRL(stats.monthSpend)}</div>
         </div>
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs text-muted-foreground flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Gasto total</div>
-          <div className="text-2xl font-bold mt-1">{formatBRL(stats.totalSpend)}</div>
+          <div className="text-2xl font-semibold tracking-tight mt-1">{formatBRL(stats.totalSpend)}</div>
         </div>
       </div>
+
+      <MiniBars
+        title="Gasto com compras"
+        sub="recebidas, últimos 6 meses"
+        data={spendByMonth}
+        format={shortBRL}
+        height={150}
+        showValues
+        empty="Nenhuma compra recebida nos últimos 6 meses."
+      />
 
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-3">

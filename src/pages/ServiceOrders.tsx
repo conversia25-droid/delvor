@@ -47,9 +47,9 @@ type OsWithCustomer = ServiceOrder & {
 
 const PRIORITY_TONE: Record<OsPriority, string> = {
   baixa:   "bg-zinc-500/15 text-zinc-300 ring-zinc-500/30",
-  normal:  "bg-sky-500/15 text-sky-300 ring-sky-500/30",
-  alta:    "bg-amber-500/15 text-amber-300 ring-amber-500/30",
-  urgente: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
+  normal:  "bg-sky-500/15 text-sky-700 dark:text-sky-300 ring-sky-500/30",
+  alta:    "bg-amber-500/15 text-amber-700 dark:text-amber-300 ring-amber-500/30",
+  urgente: "bg-rose-500/15 text-rose-700 dark:text-rose-300 ring-rose-500/30",
 };
 
 export default function ServiceOrders() {
@@ -133,8 +133,8 @@ export default function ServiceOrders() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Wrench className="h-7 w-7" /> Ordens de Serviço
+          <h1 className="text-[22px] font-semibold tracking-tight flex items-center gap-2">
+            <Wrench className="h-5 w-5 text-primary" /> Ordens de Serviço
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Acompanhe o ciclo da OS: aberta → diagnóstico → aguardando peça → execução → entrega → faturamento.
@@ -152,19 +152,19 @@ export default function ServiceOrders() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs text-muted-foreground">OS abertas</div>
-          <div className="text-2xl font-bold mt-1">{stats.open}</div>
+          <div className="text-2xl font-semibold tracking-tight mt-1">{stats.open}</div>
         </div>
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs text-muted-foreground flex items-center gap-1"><PackageOpen className="h-3 w-3" /> Aguardando peça</div>
-          <div className="text-2xl font-bold mt-1 text-orange-400">{stats.waitingPart}</div>
+          <div className="text-2xl font-semibold tracking-tight mt-1 text-orange-700 dark:text-orange-400">{stats.waitingPart}</div>
         </div>
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs text-muted-foreground flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Em atraso</div>
-          <div className="text-2xl font-bold mt-1 text-rose-400">{stats.overdue}</div>
+          <div className="text-2xl font-semibold tracking-tight mt-1 text-rose-700 dark:text-rose-400">{stats.overdue}</div>
         </div>
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs text-muted-foreground flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Concluídas no mês</div>
-          <div className="text-2xl font-bold mt-1 text-emerald-400">{stats.finishedMonth}</div>
+          <div className="text-2xl font-semibold tracking-tight mt-1 text-emerald-700 dark:text-emerald-400">{stats.finishedMonth}</div>
         </div>
       </div>
 
@@ -249,7 +249,7 @@ export default function ServiceOrders() {
                     <TableCell className="text-xs">
                       <div className="flex flex-col">
                         {o.due_at ? (
-                          <span className={overdue ? "text-rose-400 font-medium" : ""} title="Prazo de entrega">
+                          <span className={overdue ? "text-rose-700 dark:text-rose-400 font-medium" : ""} title="Prazo de entrega">
                             ⏰ {new Date(o.due_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
                           </span>
                         ) : <span className="text-muted-foreground">sem prazo</span>}

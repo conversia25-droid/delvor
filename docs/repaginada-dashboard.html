@@ -1,0 +1,585 @@
+<title>Delvor repaginado</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: menu lateral agrupado por área + painel em faixas (atenção → dinheiro → operação → listas).
+   Tipo: Plex Sans pra tudo, Plex Mono só para códigos do ofício (nº de OS, SKU, placa). */
+:root {
+  --page: #f2f4f7;
+  --card: #ffffff;
+  --side: #ffffff;
+  --ink: #0f1726;
+  --ink-2: #4b5565;
+  --muted: #7f8898;
+  --line: #e2e6ed;
+  --grid: #edf0f4;
+  --hover: #f1f4f9;
+  --brand: #1f5fd6;
+  --brand-ink: #ffffff;
+  --brand-soft: #e8effc;
+  --s1: #2a78d6;           /* série 1: Vendido */
+  --s2: #1baf7a;           /* série 2: Recebido */
+  --good: #0a8f0a;
+  --warn: #c98500;
+  --serious: #d4632f;
+  --crit: #d03b3b;
+  --good-bg: #e7f5e7;
+  --warn-bg: #fdf3dc;
+  --serious-bg: #fcebe2;
+  --crit-bg: #fbe8e8;
+  --glow: none;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Code", Menlo, monospace;
+}
+:root[data-brand="infnity"] { --brand: #6d4ad8; --brand-soft: #efeafc; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #0a0e15; --card: #121925; --side: #0d131d; --ink: #edf1f7; --ink-2: #b3bccb; --muted: #7c8698;
+    --line: #222c3c; --grid: #1a2230; --hover: #182131;
+    --brand: #5b8cff; --brand-ink: #0a0e15; --brand-soft: #16233f;
+    --s1: #3987e5; --s2: #199e70;
+    --good: #2fbf4a; --warn: #f2b33d; --serious: #ee8a5f; --crit: #ef6b6b;
+    --good-bg: #12261a; --warn-bg: #2a2212; --serious-bg: #2b1b14; --crit-bg: #2c1618;
+    --glow: drop-shadow(0 0 6px rgba(91, 140, 255, .45));
+    color-scheme: dark;
+  }
+  :root:not([data-theme="light"])[data-brand="infnity"] { --brand: #9a82ff; --brand-soft: #221a3f; --glow: drop-shadow(0 0 6px rgba(154,130,255,.45)); }
+}
+:root[data-theme="dark"] {
+  --page: #0a0e15; --card: #121925; --side: #0d131d; --ink: #edf1f7; --ink-2: #b3bccb; --muted: #7c8698;
+  --line: #222c3c; --grid: #1a2230; --hover: #182131;
+  --brand: #5b8cff; --brand-ink: #0a0e15; --brand-soft: #16233f;
+  --s1: #3987e5; --s2: #199e70;
+  --good: #2fbf4a; --warn: #f2b33d; --serious: #ee8a5f; --crit: #ef6b6b;
+  --good-bg: #12261a; --warn-bg: #2a2212; --serious-bg: #2b1b14; --crit-bg: #2c1618;
+  --glow: drop-shadow(0 0 6px rgba(91, 140, 255, .45));
+  color-scheme: dark;
+}
+:root[data-theme="dark"][data-brand="infnity"] { --brand: #9a82ff; --brand-soft: #221a3f; --glow: drop-shadow(0 0 6px rgba(154,130,255,.45)); }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font-family: var(--sans); font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.mono { font-family: var(--mono); font-size: .92em; letter-spacing: -.01em; }
+.num { font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* ---------- barra da prévia ---------- */
+.preview-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding-block: 8px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); background: var(--ink); color: var(--page); font-size: 12.5px; }
+.preview-bar strong { font-weight: 600; }
+.preview-bar .grow { flex: 1; min-width: 0; opacity: .75; }
+.seg { display: inline-flex; border-radius: 7px; padding: 2px; background: color-mix(in srgb, var(--page) 16%, transparent); gap: 2px; }
+.seg button { border: 0; background: transparent; padding: 4px 10px; border-radius: 5px; color: inherit; opacity: .75; font-size: 12px; }
+.seg button[aria-pressed="true"] { background: var(--page); color: var(--ink); opacity: 1; font-weight: 600; }
+
+/* ---------- casca ---------- */
+.app { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: calc(100vh - 40px); }
+.side { background: var(--side); border-right: 1px solid var(--line); padding: 16px 12px; display: flex; flex-direction: column; gap: 14px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+.brand { display: flex; align-items: center; gap: 9px; padding: 2px 8px; }
+.brand-mark { width: 26px; height: 26px; border-radius: 7px; background: var(--brand); color: var(--brand-ink); display: grid; place-items: center; font-weight: 700; font-size: 14px; filter: var(--glow); }
+.brand-name { font-weight: 700; font-size: 15.5px; letter-spacing: -.02em; }
+.company { margin: 0 4px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 12.5px; display: flex; align-items: center; gap: 8px; }
+.company small { display: block; color: var(--muted); font-size: 11px; }
+.dot-live { width: 7px; height: 7px; border-radius: 50%; background: var(--good); flex: none; }
+.navgroup { display: flex; flex-direction: column; gap: 1px; }
+.navgroup h4 { margin: 6px 10px 4px; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.nav { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 7px; color: var(--ink-2); font-weight: 500; font-size: 13.5px; text-decoration: none; border: 0; background: none; text-align: left; width: 100%; }
+.nav svg { width: 17px; height: 17px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.nav:hover { background: var(--hover); color: var(--ink); }
+.nav.on { background: var(--brand-soft); color: var(--brand); font-weight: 600; }
+.nav.on svg { filter: var(--glow); }
+.nav .badge { margin-left: auto; min-width: 19px; height: 19px; padding: 0 6px; border-radius: 10px; background: var(--crit); color: #fff; font-size: 11px; font-weight: 600; display: grid; place-items: center; }
+.side-foot { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px 8px 2px; border-top: 1px solid var(--line); font-size: 12.5px; }
+.avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); display: grid; place-items: center; font-weight: 600; font-size: 12px; flex: none; }
+
+.main { min-width: 0; padding-block: 18px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 16px; }
+@media (min-width: 901px) { .main { padding-left: 28px; padding-right: max(28px, env(safe-area-inset-right, 0px)); } }
+
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
+.top h1 { margin: 0; font-size: 21px; font-weight: 600; letter-spacing: -.02em; text-wrap: balance; }
+.top .date { color: var(--muted); font-size: 13px; }
+.search { flex: 1 1 260px; max-width: 420px; display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 7px 10px; color: var(--muted); font-size: 13px; }
+.search svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2; }
+.search kbd { margin-left: auto; font-family: var(--mono); font-size: 11px; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
+.actions { display: flex; gap: 8px; margin-left: auto; }
+.btn { border: 1px solid var(--line); background: var(--card); color: var(--ink); padding: 7px 12px; border-radius: 8px; font-weight: 500; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; }
+.btn:hover { background: var(--hover); }
+.btn.primary { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.06); }
+
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.filters .seg { background: var(--card); border: 1px solid var(--line); padding: 3px; }
+.filters .seg button { color: var(--ink-2); opacity: 1; padding: 5px 12px; font-size: 12.5px; }
+.filters .seg button[aria-pressed="true"] { background: var(--brand-soft); color: var(--brand); }
+.filters .note { color: var(--muted); font-size: 12px; }
+
+/* ---------- painéis ---------- */
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
+.panel-h { display: flex; align-items: baseline; gap: 10px; padding: 14px 16px 0; }
+.panel-h h2 { margin: 0; font-size: 13.5px; font-weight: 600; }
+.panel-h .sub { color: var(--muted); font-size: 12px; }
+.panel-h a, .panel-h .link { margin-left: auto; color: var(--brand); font-size: 12.5px; font-weight: 500; text-decoration: none; background: none; border: 0; padding: 0; }
+.panel-b { padding: 12px 16px 16px; }
+
+/* atenção */
+.attention { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.att { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--line); min-width: 0; }
+.att:nth-child(-n+2) { border-top: 0; }
+.att:nth-child(odd) { border-right: 1px solid var(--line); }
+.att .txt { min-width: 0; flex: 1; }
+.att .t1 { font-weight: 500; }
+.att .t2 { color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.att a { color: var(--brand); font-size: 12.5px; font-weight: 500; text-decoration: none; white-space: nowrap; }
+.pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; flex: none; }
+.pill svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.pill.crit { background: var(--crit-bg); color: var(--crit); }
+.pill.serious { background: var(--serious-bg); color: var(--serious); }
+.pill.warn { background: var(--warn-bg); color: var(--warn); }
+.pill.good { background: var(--good-bg); color: var(--good); }
+.pill.info { background: var(--brand-soft); color: var(--brand); }
+
+/* linha dinheiro */
+.row-money { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; }
+.kpis { display: flex; flex-wrap: wrap; gap: 8px 28px; padding: 14px 16px 4px; }
+.kpi .l { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 6px; }
+.kpi .v { font-size: 24px; font-weight: 600; letter-spacing: -.02em; margin-top: 2px; }
+.kpi .d { font-size: 12px; color: var(--muted); }
+.kpi .d b { color: var(--good); font-weight: 600; }
+.kpi .d .bad { color: var(--crit); font-weight: 600; }
+.sw { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+.chart { position: relative; padding: 4px 8px 10px 4px; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+.chart text { font-family: var(--sans); }
+.tip { position: absolute; pointer-events: none; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 6px 20px rgba(0,0,0,.12); min-width: 150px; opacity: 0; transition: opacity .12s; z-index: 2; }
+.tip .h { font-weight: 600; margin-bottom: 4px; }
+.tip .r { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.tip .r span:first-child { display: flex; align-items: center; gap: 6px; color: var(--ink-2); }
+
+/* caixa */
+.cash-status { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-2); }
+.cash-total { font-size: 26px; font-weight: 600; letter-spacing: -.02em; margin: 6px 0 2px; }
+.cash-rows { display: flex; flex-direction: column; gap: 9px; margin-top: 14px; }
+.cash-row { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; align-items: center; gap: 10px; font-size: 13px; }
+.cash-row .bar { height: 6px; border-radius: 4px; background: var(--grid); overflow: hidden; }
+.cash-row .bar i { display: block; height: 100%; border-radius: 4px; background: var(--s1); }
+.cash-row .val { font-variant-numeric: tabular-nums; }
+.cash-row .hint { color: var(--muted); font-size: 11.5px; grid-column: 2 / 4; margin-top: -6px; }
+.cash-foot { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+.expected { background: var(--page); border-radius: 8px; padding: 10px 12px; margin-top: 14px; display: flex; justify-content: space-between; align-items: baseline; font-size: 12.5px; }
+.expected b { font-size: 15px; color: var(--ink); }
+
+/* linha operação */
+.row-ops { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.hbar { display: flex; flex-direction: column; gap: 10px; }
+.hbar .it { display: grid; grid-template-columns: 128px minmax(0, 1fr) 30px; align-items: center; gap: 10px; font-size: 13px; border-radius: 6px; }
+.hbar .it:hover .track i { filter: brightness(1.1); }
+.hbar .lbl { color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hbar .track { height: 10px; background: transparent; }
+.hbar .track i { display: block; height: 100%; background: var(--s1); border-radius: 0 4px 4px 0; min-width: 4px; }
+.hbar .n { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.hbar .it.flag .lbl::after { content: " ●"; color: var(--serious); font-size: 9px; vertical-align: 2px; }
+
+.rank { display: flex; flex-direction: column; }
+.rank .it { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 9px 0; border-top: 1px solid var(--line); }
+.rank .it:first-child { border-top: 0; padding-top: 0; }
+.rank .nm { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank .meta { color: var(--muted); font-size: 12px; }
+.rank .val { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.rank .bar { grid-column: 1 / 3; height: 4px; background: var(--grid); border-radius: 3px; overflow: hidden; }
+.rank .bar i { display: block; height: 100%; background: var(--s1); border-radius: 3px; }
+
+/* linha listas */
+.row-lists { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; }
+.tbl-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 8px 16px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 10px 16px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: var(--hover); }
+td .sm { color: var(--muted); font-size: 12px; }
+.late { color: var(--crit); font-weight: 600; }
+.stock .it { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+.stock .it:first-child { border-top: 0; padding-top: 0; }
+.stock .meter { grid-column: 1 / 3; display: flex; gap: 3px; }
+.stock .meter span { flex: 1; height: 5px; border-radius: 2px; background: var(--grid); }
+.stock .meter span.f { background: var(--serious); }
+.stock .meter span.f.z { background: var(--crit); }
+
+@media (max-width: 1180px) {
+  .row-ops { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .row-ops > :last-child { grid-column: 1 / -1; }
+}
+@media (max-width: 980px) {
+  .row-money, .row-lists { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 900px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .side { display: none; }
+  .mobile-head { display: flex !important; }
+}
+@media (max-width: 640px) {
+  .attention { grid-template-columns: minmax(0, 1fr); }
+  .att:nth-child(odd) { border-right: 0; }
+  .att:nth-child(2) { border-top: 1px solid var(--line); }
+  .row-ops { grid-template-columns: minmax(0, 1fr); }
+  .actions { margin-left: 0; }
+  .hbar .it { grid-template-columns: 104px minmax(0, 1fr) 26px; }
+}
+.mobile-head { display: none; align-items: center; gap: 9px; }
+</style>
+
+<div class="preview-bar" role="region" aria-label="Controles da prévia">
+  <strong>Prévia da repaginada</strong>
+  <span class="grow">Dados de exemplo. Os gráficos respondem ao mouse.</span>
+  <span>Tema</span>
+  <span class="seg" id="seg-theme">
+    <button id="t-light" type="button" data-v="light">Claro</button>
+    <button id="t-dark" type="button" data-v="dark">Escuro</button>
+  </span>
+  <span>Marca</span>
+  <span class="seg" id="seg-brand">
+    <button id="b-delvor" type="button" data-v="delvor" aria-pressed="true">Delvor</button>
+    <button id="b-infnity" type="button" data-v="infnity" aria-pressed="false">Infnity OS</button>
+  </span>
+</div>
+
+<div class="app">
+  <aside class="side" aria-label="Menu">
+    <div class="brand"><span class="brand-mark" id="mark">D</span><span class="brand-name" id="bname">Delvor</span></div>
+    <div class="company"><span class="dot-live"></span><span>Bom Toner Assistência<small>Centro · plano Completo</small></span></div>
+
+    <nav class="navgroup"><h4>Operação</h4>
+      <a class="nav on" href="#"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Visão geral</a>
+      <a class="nav" href="#"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg>Ordens de serviço</a>
+      <a class="nav" href="#"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Agenda</a>
+      <a class="nav" href="#"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-12.6 7.3L3 21l2.2-5.4A8.4 8.4 0 1 1 21 11.5z"/></svg>WhatsApp</a>
+      <a class="nav" href="#"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg>Clientes</a>
+    </nav>
+    <nav class="navgroup"><h4>Vendas</h4>
+      <a class="nav" href="#"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg>PDV</a>
+      <a class="nav" href="#"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>Orçamentos e vendas</a>
+      <a class="nav" href="#"><svg viewBox="0 0 24 24"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>Locações</a>
+    </nav>
+    <nav class="navgroup"><h4>Estoque</h4>
+      <a class="nav" href="#"><svg viewBox="0 0 24 24"><path d="M21 16V8l-9-5-9 5v8l9 5 9-5z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg>Produtos</a>
+      <a class="nav" href="#"><svg viewBox="0 0 24 24"><path d="M5 17H3V7h11l3 5h4v5h-2"/><circle cx="7.5" cy="17" r="2"/><circle cx="16.5" cy="17" r="2"/></svg>Fornecedores e compras</a>
+    </nav>
+    <nav class="navgroup"><h4>Financeiro</h4>
+      <a class="nav" href="#"><svg viewBox="0 0 24 24"><path d="M11 15h2a2 2 0 1 0 0-4h-3a2 2 0 0 1 0-4h3M11.5 5v2M11.5 15v2"/><path d="M2 21h4l4-3h6l4-4-2-2-4 3"/></svg>Contas a receber<span class="badge" title="3 vencidos">3</span></a>
+      <a class="nav" href="#"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 10h18M8 15h3"/></svg>Contas a pagar</a>
+      <a class="nav" href="#"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>Relatórios</a>
+    </nav>
+    <nav class="navgroup"><h4>Gestão</h4>
+      <a class="nav" href="#"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3 14H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 3V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 21 10h.1a2 2 0 1 1 0 4H21a1.7 1.7 0 0 0-1.6 1z"/></svg>Equipe e configurações</a>
+    </nav>
+
+    <div class="side-foot"><span class="avatar">RS</span><span>Rafaela Souza<br><span style="color:var(--muted);font-size:11.5px">Gerente</span></span></div>
+  </aside>
+
+  <main class="main">
+    <div class="mobile-head"><span class="brand-mark" id="mark2">D</span><strong id="bname2">Delvor</strong><span style="color:var(--muted);font-size:12.5px">Bom Toner Assistência</span></div>
+
+    <div class="top">
+      <div>
+        <h1>Bom dia, Rafaela</h1>
+        <div class="date">terça-feira, 20 de outubro</div>
+      </div>
+      <div class="search" role="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>Buscar OS, cliente ou produto<kbd>Ctrl K</kbd></div>
+      <div class="actions">
+        <button class="btn" type="button" id="btn-venda">Venda rápida</button>
+        <button class="btn primary" type="button" id="btn-os">Nova OS</button>
+      </div>
+    </div>
+
+    <!-- Precisa de atenção -->
+    <section class="panel" aria-labelledby="att-h">
+      <div class="panel-h"><h2 id="att-h">Precisa de atenção</h2><span class="sub">4 itens</span></div>
+      <div class="attention" style="margin-top:8px">
+        <div class="att"><span class="pill crit"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>Vencido</span>
+          <div class="txt"><div class="t1">3 boletos vencidos · R$ 3.180,00</div><div class="t2">Gráfica Ideal (12 dias), Escritório Mota, Clínica Sorriso</div></div><a href="#">Cobrar</a></div>
+        <div class="att"><span class="pill serious"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Atrasada</span>
+          <div class="txt"><div class="t1">2 OS passaram do prazo</div><div class="t2"><span class="mono">#4812</span> Epson L3250 · <span class="mono">#4807</span> HP M428 (aguardando fusor)</div></div><a href="#">Abrir</a></div>
+        <div class="att"><span class="pill warn"><svg viewBox="0 0 24 24"><path d="M21 16V8l-9-5-9 5v8l9 5 9-5z"/></svg>Repor</span>
+          <div class="txt"><div class="t1">4 itens abaixo do mínimo</div><div class="t2">Toner Brother TN-1060 (2 de 3), Fusor HP M428 (0 de 1)…</div></div><a href="#">Ver lista</a></div>
+        <div class="att"><span class="pill info"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 11h20"/></svg>Caixa</span>
+          <div class="txt"><div class="t1">Caixa aberto desde 08:12</div><div class="t2">R$ 412,50 em dinheiro esperado na gaveta</div></div><a href="#">Fechar</a></div>
+      </div>
+    </section>
+
+    <div class="filters" role="group" aria-label="Período">
+      <span class="seg" id="seg-period">
+        <button id="p-7" type="button" data-v="7" aria-pressed="false">7 dias</button>
+        <button id="p-mes" type="button" data-v="mes" aria-pressed="true">Outubro</button>
+        <button id="p-30" type="button" data-v="30" aria-pressed="false">30 dias</button>
+      </span>
+      <span class="note">O período vale para todos os gráficos abaixo.</span>
+    </div>
+
+    <!-- Dinheiro -->
+    <div class="row-money">
+      <section class="panel" aria-labelledby="money-h">
+        <div class="panel-h"><h2 id="money-h">Vendido × Recebido</h2><span class="sub" id="money-sub">acumulado no mês</span><a href="#">Relatório</a></div>
+        <div class="kpis">
+          <div class="kpi"><div class="l"><span class="sw" style="background:var(--s1)"></span>Vendido</div><div class="v" id="k-vend">—</div><div class="d"><b>+9%</b> sobre setembro no mesmo dia</div></div>
+          <div class="kpi"><div class="l"><span class="sw" style="background:var(--s2)"></span>Recebido</div><div class="v" id="k-rec">—</div><div class="d">dinheiro, pix, débito e baixas</div></div>
+          <div class="kpi"><div class="l">A receber</div><div class="v">R$ 12.640</div><div class="d"><span class="bad">R$ 3.180 vencido</span> · 17 pagamentos</div></div>
+        </div>
+        <div class="chart" id="line-wrap"><svg id="line" role="img" aria-label="Vendido e recebido acumulados por dia"></svg><div class="tip" id="line-tip"></div></div>
+      </section>
+
+      <section class="panel" aria-labelledby="cash-h">
+        <div class="panel-h"><h2 id="cash-h">Caixa de hoje</h2><a href="#">Abrir PDV</a></div>
+        <div class="panel-b">
+          <div class="cash-status"><span class="pill good"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Aberto</span>desde 08:12 · Rafaela</div>
+          <div class="cash-total">R$ 2.316,80</div>
+          <div style="color:var(--muted);font-size:12.5px">entrou hoje · 14 vendas · 1 baixa de boleto</div>
+          <div class="cash-rows" id="cash-rows"></div>
+          <div class="expected"><span style="color:var(--muted)">Dinheiro esperado na gaveta</span><b class="num">R$ 412,50</b></div>
+          <div class="cash-foot"><span>Sangria R$ 300,00 · troco inicial R$ 150,00</span><button class="btn" type="button" id="btn-fechar">Fechar caixa</button></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Operação -->
+    <div class="row-ops">
+      <section class="panel" aria-labelledby="os-h">
+        <div class="panel-h"><h2 id="os-h">OS por etapa</h2><span class="sub">27 abertas</span><a href="#">Kanban</a></div>
+        <div class="panel-b"><div class="hbar" id="os-bars"></div>
+          <div style="margin-top:12px;font-size:12px;color:var(--muted)"><span style="color:var(--serious)">●</span> etapa com OS atrasada</div></div>
+      </section>
+
+      <section class="panel" aria-labelledby="ar-h">
+        <div class="panel-h"><h2 id="ar-h">A receber por vencimento</h2><a href="#">Contas a receber</a></div>
+        <div class="chart" id="aging-wrap" style="padding:8px 12px 12px"><svg id="aging" role="img" aria-label="Valores a receber por faixa de vencimento"></svg><div class="tip" id="aging-tip"></div></div>
+      </section>
+
+      <section class="panel" aria-labelledby="top-h">
+        <div class="panel-h"><h2 id="top-h">Mais vendidos</h2><span class="sub">em outubro</span></div>
+        <div class="panel-b"><div class="rank" id="rank"></div></div>
+      </section>
+    </div>
+
+    <!-- Listas -->
+    <div class="row-lists">
+      <section class="panel" aria-labelledby="last-h">
+        <div class="panel-h"><h2 id="last-h">OS recentes</h2><a href="#">Ver todas</a></div>
+        <div class="tbl-wrap" style="margin-top:8px">
+          <table>
+            <thead><tr><th>OS</th><th>Cliente e equipamento</th><th>Etapa</th><th>Técnico</th><th>Prazo</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">#4815</td><td>Contabilidade Nunes<br><span class="sm">Brother DCP-L2540 · atolamento de papel</span></td><td><span class="pill info">Diagnóstico</span></td><td>Diego</td><td class="num">22/10</td></tr>
+              <tr><td class="mono">#4812</td><td>Escola Monteiro Lobato<br><span class="sm">Epson L3250 · cabeça entupida</span></td><td><span class="pill warn">Aguard. peça</span></td><td>Diego</td><td class="num late">18/10</td></tr>
+              <tr><td class="mono">#4810</td><td>Clínica Sorriso<br><span class="sm">HP Laser 107w · manutenção preventiva</span></td><td><span class="pill good">Pronta</span></td><td>Lucas</td><td class="num">20/10</td></tr>
+              <tr><td class="mono">#4807</td><td>Mota Advogados<br><span class="sm">HP M428dw · fusor com ruído</span></td><td><span class="pill warn">Aguard. peça</span></td><td>Lucas</td><td class="num late">17/10</td></tr>
+              <tr><td class="mono">#4806</td><td>Papelaria Estrela<br><span class="sm">Ricoh SP 3710 · troca de cilindro</span></td><td><span class="pill info">Em execução</span></td><td>Diego</td><td class="num">21/10</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="stk-h">
+        <div class="panel-h"><h2 id="stk-h">Estoque crítico</h2><a href="#">Comprar</a></div>
+        <div class="panel-b stock" id="stock"></div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script>
+(() => {
+  const BRL = (v, cents = false) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: cents ? 2 : 0, maximumFractionDigits: cents ? 2 : 0 });
+  const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+  /* ---------- dados de exemplo (outubro/2026; dom 4, 11 e 18 fechado) ---------- */
+  const vendDaily = [2140, 2380, 1460, 0, 2910, 3260, 2740, 3180, 1950, 820, 0, 3320, 2990, 2870, 3540, 2460, 1380, 0, 3110, 2860];
+  const recDaily  = [1620, 2050, 1310, 0, 2240, 2610, 2380, 2950, 1700, 1210, 0, 2480, 2660, 2390, 3010, 2210, 1490, 0, 2620, 1890];
+  const sepVend = [1980, 2210, 1300, 0, 2600, 2950, 2500, 2790, 1720, 700, 0, 3020, 2700, 2650, 3100, 2240, 1250, 0, 2830, 2610, 2900, 3050, 2480, 1600, 0, 2950, 2780, 2600, 2410, 2350];
+  const sepRec  = sepVend.map((v, i) => Math.round(v * (0.82 + (i % 5) * 0.02)));
+
+  const PERIODS = {
+    mes: { label: "acumulado no mês", days: vendDaily.map((_, i) => `${String(i + 1).padStart(2, "0")}/10`), v: vendDaily, r: recDaily },
+    "7": { label: "últimos 7 dias", days: vendDaily.slice(-7).map((_, i) => `${String(14 + i).padStart(2, "0")}/10`), v: vendDaily.slice(-7), r: recDaily.slice(-7) },
+    "30": { label: "últimos 30 dias", days: [...sepVend.slice(-10).map((_, i) => `${21 + i}/09`), ...vendDaily.map((_, i) => `${String(i + 1).padStart(2, "0")}/10`)], v: [...sepVend.slice(-10), ...vendDaily], r: [...sepRec.slice(-10), ...recDaily] },
+  };
+  let period = "mes";
+  const cum = (a) => { let s = 0; return a.map((x) => (s += x)); };
+
+  /* ---------- gráfico de linhas: Vendido × Recebido acumulado ---------- */
+  function niceMax(v) { const p = Math.pow(10, Math.floor(Math.log10(v))); const n = v / p; return (n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p; }
+  function renderLine() {
+    const P = PERIODS[period];
+    const V = cum(P.v), R = cum(P.r);
+    document.getElementById("k-vend").textContent = BRL(V[V.length - 1]);
+    document.getElementById("k-rec").textContent = BRL(R[R.length - 1]);
+    document.getElementById("money-sub").textContent = P.label;
+
+    const wrap = document.getElementById("line-wrap");
+    const svg = document.getElementById("line");
+    const W = Math.max(300, wrap.clientWidth - 12), H = 240;
+    const m = { l: 52, r: 86, t: 12, b: 26 };
+    const iw = W - m.l - m.r, ih = H - m.t - m.b;
+    const max = niceMax(Math.max(...V) * 1.04);
+    const n = V.length;
+    const x = (i) => m.l + (n === 1 ? iw / 2 : (i * iw) / (n - 1));
+    const y = (v) => m.t + ih - (v / max) * ih;
+    const ticks = [0, max / 4, max / 2, (3 * max) / 4, max];
+    const path = (arr) => arr.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
+    const area = (arr) => `${path(arr)}L${x(n - 1).toFixed(1)},${y(0)}L${x(0).toFixed(1)},${y(0)}Z`;
+    const every = Math.ceil(n / 7);
+    const ink2 = css("--ink-2"), muted = css("--muted"), grid = css("--grid"), line = css("--line");
+    const s1 = css("--s1"), s2 = css("--s2"), card = css("--card");
+
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.setAttribute("height", H);
+    const lastV = V[n - 1], lastR = R[n - 1];
+    let ly1 = y(lastV), ly2 = y(lastR);
+    if (Math.abs(ly1 - ly2) < 30) { const mid = (ly1 + ly2) / 2; ly1 = mid - 15; ly2 = mid + 15; }
+
+    svg.innerHTML = `
+      <defs>
+        <linearGradient id="gv" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${s1}" stop-opacity=".18"/><stop offset="1" stop-color="${s1}" stop-opacity="0"/></linearGradient>
+      </defs>
+      ${ticks.map((t) => `<line x1="${m.l}" x2="${m.l + iw}" y1="${y(t)}" y2="${y(t)}" stroke="${t === 0 ? line : grid}" stroke-width="1"/>
+        <text x="${m.l - 8}" y="${y(t) + 4}" text-anchor="end" font-size="11" fill="${muted}" style="font-variant-numeric:tabular-nums">${t >= 1000 ? (t / 1000).toLocaleString("pt-BR") + " mil" : t}</text>`).join("")}
+      ${P.days.map((d, i) => (i % every === 0 || i === n - 1) ? `<text x="${x(i)}" y="${H - 6}" text-anchor="middle" font-size="11" fill="${muted}">${d}</text>` : "").join("")}
+      <path d="${area(V)}" fill="url(#gv)"/>
+      <path d="${path(V)}" fill="none" stroke="${s1}" stroke-width="2" stroke-linejoin="round" style="filter:var(--glow)"/>
+      <path d="${path(R)}" fill="none" stroke="${s2}" stroke-width="2" stroke-linejoin="round"/>
+      <circle cx="${x(n - 1)}" cy="${y(lastV)}" r="4" fill="${s1}" stroke="${card}" stroke-width="2"/>
+      <circle cx="${x(n - 1)}" cy="${y(lastR)}" r="4" fill="${s2}" stroke="${card}" stroke-width="2"/>
+      <text x="${x(n - 1) + 10}" y="${ly1 - 2}" font-size="11" fill="${muted}">Vendido</text>
+      <text x="${x(n - 1) + 10}" y="${ly1 + 12}" font-size="12" font-weight="600" fill="${ink2}">${(lastV / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil</text>
+      <text x="${x(n - 1) + 10}" y="${ly2 - 2}" font-size="11" fill="${muted}">Recebido</text>
+      <text x="${x(n - 1) + 10}" y="${ly2 + 12}" font-size="12" font-weight="600" fill="${ink2}">${(lastR / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil</text>
+      <g id="xh" style="display:none"><line id="xh-l" y1="${m.t}" y2="${m.t + ih}" stroke="${muted}" stroke-width="1"/>
+        <circle id="xh-v" r="4.5" fill="${s1}" stroke="${card}" stroke-width="2"/><circle id="xh-r" r="4.5" fill="${s2}" stroke="${card}" stroke-width="2"/></g>
+      <rect id="hit" x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent" tabindex="0" aria-label="Passe o mouse ou use as setas para ver cada dia"/>`;
+
+    const tip = document.getElementById("line-tip");
+    const hit = svg.querySelector("#hit"), xh = svg.querySelector("#xh");
+    let cur = n - 1;
+    const show = (i) => {
+      cur = Math.max(0, Math.min(n - 1, i));
+      xh.style.display = "";
+      svg.querySelector("#xh-l").setAttribute("x1", x(cur)); svg.querySelector("#xh-l").setAttribute("x2", x(cur));
+      svg.querySelector("#xh-v").setAttribute("cx", x(cur)); svg.querySelector("#xh-v").setAttribute("cy", y(V[cur]));
+      svg.querySelector("#xh-r").setAttribute("cx", x(cur)); svg.querySelector("#xh-r").setAttribute("cy", y(R[cur]));
+      tip.innerHTML = `<div class="h">${P.days[cur]}${P.v[cur] === 0 ? " · fechado" : ""}</div>
+        <div class="r"><span><i class="sw" style="background:${s1}"></i>Vendido no dia</span><b class="num">${BRL(P.v[cur])}</b></div>
+        <div class="r"><span><i class="sw" style="background:${s2}"></i>Recebido no dia</span><b class="num">${BRL(P.r[cur])}</b></div>
+        <div class="r" style="margin-top:4px;color:var(--muted)"><span>Acumulado</span><span class="num">${BRL(V[cur])} / ${BRL(R[cur])}</span></div>`;
+      const sx = (x(cur) / W) * svg.getBoundingClientRect().width;
+      tip.style.left = Math.min(Math.max(sx - 80, 0), wrap.clientWidth - 200) + "px";
+      tip.style.top = "8px";
+      tip.style.opacity = 1;
+    };
+    const hide = () => { xh.style.display = "none"; tip.style.opacity = 0; };
+    hit.addEventListener("mousemove", (e) => {
+      const r = svg.getBoundingClientRect(); const px = ((e.clientX - r.left) / r.width) * W;
+      show(Math.round(((px - m.l) / iw) * (n - 1)));
+    });
+    hit.addEventListener("mouseleave", hide);
+    hit.addEventListener("focus", () => show(cur));
+    hit.addEventListener("blur", hide);
+    hit.addEventListener("keydown", (e) => { if (e.key === "ArrowLeft") { show(cur - 1); e.preventDefault(); } if (e.key === "ArrowRight") { show(cur + 1); e.preventDefault(); } });
+  }
+
+  /* ---------- A receber por vencimento ---------- */
+  const aging = [
+    { k: "+30 dias", sub: "vencido", v: 820, st: "crit" },
+    { k: "8–30", sub: "vencido", v: 1540, st: "crit" },
+    { k: "1–7", sub: "vencido", v: 820, st: "serious" },
+    { k: "Hoje", sub: "vence hoje", v: 960, st: "warn" },
+    { k: "7 dias", sub: "a vencer", v: 4300, st: null },
+    { k: "8–30", sub: "a vencer", v: 4200, st: null },
+  ];
+  function renderAging() {
+    const wrap = document.getElementById("aging-wrap"), svg = document.getElementById("aging"), tip = document.getElementById("aging-tip");
+    const W = Math.max(260, wrap.clientWidth - 24), H = 210, m = { l: 8, r: 8, t: 22, b: 40 };
+    const iw = W - m.l - m.r, ih = H - m.t - m.b, n = aging.length, gap = 8;
+    const bw = (iw - gap * (n - 1)) / n, max = 5000;
+    const col = (a) => a.st ? css("--" + a.st) : css("--s1");
+    const muted = css("--muted"), ink2 = css("--ink-2"), line = css("--line");
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("height", H);
+    const splitX = m.l + 3 * (bw + gap) - gap / 2;
+    svg.innerHTML = aging.map((a, i) => {
+      const h = Math.max(4, (a.v / max) * ih), x0 = m.l + i * (bw + gap), y0 = m.t + ih - h;
+      return `<g class="ag" data-i="${i}" tabindex="0">
+        <rect x="${x0 - gap / 2}" y="${m.t}" width="${bw + gap}" height="${ih + m.b}" fill="transparent"/>
+        <path d="M${x0},${m.t + ih}V${y0 + 4}q0,-4 4,-4h${bw - 8}q4,0 4,4V${m.t + ih}Z" fill="${col(a)}"/>
+        <text x="${x0 + bw / 2}" y="${y0 - 6}" text-anchor="middle" font-size="11" font-weight="600" fill="${ink2}">${(a.v / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil</text>
+        <text x="${x0 + bw / 2}" y="${H - 22}" text-anchor="middle" font-size="11" fill="${ink2}">${a.k}</text></g>`;
+    }).join("") + `<line x1="${m.l}" x2="${m.l + iw}" y1="${m.t + ih}" y2="${m.t + ih}" stroke="${line}"/>
+      <line x1="${splitX}" x2="${splitX}" y1="${m.t - 14}" y2="${m.t + ih}" stroke="${line}"/>
+      <text x="${splitX - 6}" y="${m.t - 8}" text-anchor="end" font-size="10.5" font-weight="600" fill="${css("--crit")}">VENCIDO R$ 3.180</text>
+      <text x="${splitX + 6}" y="${m.t - 8}" font-size="10.5" font-weight="600" fill="${muted}">A VENCER R$ 9.460</text>
+      <text x="${m.l + iw / 2}" y="${H - 6}" text-anchor="middle" font-size="10.5" fill="${muted}">dias em relação a hoje</text>`;
+    svg.querySelectorAll(".ag").forEach((g) => {
+      const a = aging[+g.dataset.i];
+      const on = () => {
+        tip.innerHTML = `<div class="h">${a.k} · ${a.sub}</div><div class="r"><span>Valor</span><b class="num">${BRL(a.v, true)}</b></div>`;
+        const r = svg.getBoundingClientRect(), gr = g.getBoundingClientRect();
+        tip.style.left = Math.min(Math.max(gr.left - r.left - 30, 0), wrap.clientWidth - 170) + "px"; tip.style.top = "6px"; tip.style.opacity = 1;
+      };
+      g.addEventListener("mouseenter", on); g.addEventListener("focus", on);
+      g.addEventListener("mouseleave", () => tip.style.opacity = 0); g.addEventListener("blur", () => tip.style.opacity = 0);
+    });
+  }
+
+  /* ---------- OS por etapa, caixa, ranking, estoque ---------- */
+  const os = [["Aberta", 6], ["Diagnóstico", 4], ["Aguard. aprovação", 2], ["Aguard. peça", 5, true], ["Em execução", 7], ["Pronta p/ retirar", 3]];
+  document.getElementById("os-bars").innerHTML = os.map(([l, v, f]) =>
+    `<div class="it${f ? " flag" : ""}" title="${l}: ${v} OS${f ? " · 2 atrasadas" : ""}"><span class="lbl">${l}</span><span class="track"><i style="width:${(v / 7) * 100}%"></i></span><span class="n">${v}</span></div>`).join("");
+
+  const cash = [["Dinheiro", 562.5, ""], ["Pix", 948.3, ""], ["Débito", 386, ""], ["Boleto (baixa)", 420, "Gráfica Ideal · venda #002918"]];
+  const cmax = Math.max(...cash.map((c) => c[1]));
+  document.getElementById("cash-rows").innerHTML = cash.map(([l, v, h]) =>
+    `<div class="cash-row"><span>${l}</span><span class="bar"><i style="width:${(v / cmax) * 100}%"></i></span><span class="val">${BRL(v, true)}</span>${h ? `<span class="hint">${h}</span>` : ""}</div>`).join("") +
+    `<div class="cash-row" style="color:var(--muted)"><span>Crédito</span><span style="font-size:11.5px">R$ 1.240,00 vai para Contas a receber (repasse 19/11)</span><span></span></div>`;
+
+  const top = [["Toner HP CF258A", "TN-CF258A", 18, 7002], ["Recarga de toner", "RECG", 31, 2480], ["Manutenção preventiva", "MANT", 14, 2800], ["Cartucho HP 664", "CT-HP664", 22, 1738], ["Fusor HP M428", "PC-FUS428", 2, 1440]]
+    .sort((a, b) => b[3] - a[3]);
+  document.getElementById("rank").innerHTML = top.map(([n, c, q, v]) =>
+    `<div class="it"><span class="nm">${n}</span><span class="val">${BRL(v)}</span><span class="meta"><span class="mono">${c}</span> · ${q} ${c.length <= 4 ? "serviços" : "un"}</span><span></span><span class="bar"><i style="width:${(v / top[0][3]) * 100}%"></i></span></div>`).join("");
+
+  const stock = [["Fusor HP M428", "PC-FUS428", 0, 1], ["Toner Brother TN-1060", "TN-TN1060", 2, 3], ["Cilindro Ricoh SP 3710", "PC-CIL3710", 1, 2], ["Cabo USB AB 1,5 m", "AC-USBAB", 6, 10]];
+  document.getElementById("stock").innerHTML = stock.map(([n, c, q, min]) => {
+    const segs = Math.max(min, 1);
+    return `<div class="it"><span><span style="font-weight:500">${n}</span><br><span class="mono" style="color:var(--muted)">${c}</span></span>
+      <span class="${q === 0 ? "pill crit" : "pill warn"}">${q} de ${min}</span>
+      <span class="meter" aria-hidden="true">${Array.from({ length: Math.min(segs, 10) }, (_, i) => `<span class="${i < q ? "f" : q === 0 && i === 0 ? "f z" : ""}"></span>`).join("")}</span></div>`;
+  }).join("");
+
+  /* ---------- controles ---------- */
+  const root = document.documentElement;
+  function syncTheme() {
+    const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    document.getElementById("t-light").setAttribute("aria-pressed", String(!dark));
+    document.getElementById("t-dark").setAttribute("aria-pressed", String(dark));
+  }
+  document.querySelectorAll("#seg-theme button").forEach((b) => b.addEventListener("click", () => { root.dataset.theme = b.dataset.v; syncTheme(); renderAll(); }));
+  document.querySelectorAll("#seg-brand button").forEach((b) => b.addEventListener("click", () => {
+    const inf = b.dataset.v === "infnity";
+    if (inf) root.dataset.brand = "infnity"; else delete root.dataset.brand;
+    document.querySelectorAll("#seg-brand button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    ["bname", "bname2"].forEach((id) => document.getElementById(id).textContent = inf ? "Infnity OS" : "Delvor");
+    ["mark", "mark2"].forEach((id) => document.getElementById(id).textContent = inf ? "∞" : "D");
+    renderAll();
+  }));
+  document.querySelectorAll("#seg-period button").forEach((b) => b.addEventListener("click", () => {
+    period = b.dataset.v;
+    document.querySelectorAll("#seg-period button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    renderLine();
+  }));
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { syncTheme(); renderAll(); });
+  new MutationObserver(() => { syncTheme(); renderAll(); }).observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+
+  function renderAll() { renderLine(); renderAging(); }
+  let t; addEventListener("resize", () => { clearTimeout(t); t = setTimeout(renderAll, 120); });
+  syncTheme(); renderAll();
+  document.fonts && document.fonts.ready.then(renderAll);
+})();
+</script>

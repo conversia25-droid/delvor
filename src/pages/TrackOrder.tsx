@@ -142,7 +142,7 @@ export default function TrackOrder() {
                 />
               </div>
             </div>
-            {errorMsg && <p className="text-xs text-rose-400">{errorMsg}</p>}
+            {errorMsg && <p className="text-xs text-rose-700 dark:text-rose-400">{errorMsg}</p>}
             <Button type="submit" className="w-full h-11" disabled={loading}>
               {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
               Consultar
@@ -161,7 +161,7 @@ export default function TrackOrder() {
         {/* erro de carregamento (token) */}
         {token && !loading && errorMsg && (
           <div className="rounded-xl border bg-card p-6 text-center">
-            <p className="text-sm text-rose-400">{errorMsg}</p>
+            <p className="text-sm text-rose-700 dark:text-rose-400">{errorMsg}</p>
           </div>
         )}
 

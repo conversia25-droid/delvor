@@ -25,7 +25,7 @@ import {
 
 const THEME_OPTIONS = [
   { value: "light" as const,    label: "Claro",    Icon: Sun,            iconCls: "text-amber-500" },
-  { value: "dark" as const,     label: "Escuro",   Icon: Moon,           iconCls: "text-blue-400" },
+  { value: "dark" as const,     label: "Escuro",   Icon: Moon,           iconCls: "text-blue-700 dark:text-blue-400" },
   { value: "whatsapp" as const, label: "WhatsApp", Icon: MessageCircle,  iconCls: "text-emerald-500" },
 ];
 
@@ -77,7 +77,7 @@ export default function MobileLayout() {
           <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="h-10 w-10">
-                <div className="h-8 w-8 rounded-full bg-blue-500/15 ring-1 ring-blue-500/30 flex items-center justify-center text-[11px] font-semibold text-blue-300">
+                <div className="h-8 w-8 rounded-full bg-blue-500/15 ring-1 ring-blue-500/30 flex items-center justify-center text-[11px] font-semibold text-blue-700 dark:text-blue-300">
                   {initials}
                 </div>
               </Button>
@@ -109,7 +109,7 @@ export default function MobileLayout() {
                     >
                       <opt.Icon className={`h-4 w-4 mr-2 ${opt.iconCls}`} />
                       <span className="flex-1 text-left">{opt.label}</span>
-                      {active && <Check className="h-4 w-4 text-blue-400" />}
+                      {active && <Check className="h-4 w-4 text-blue-700 dark:text-blue-400" />}
                     </Button>
                   );
                 })}
@@ -128,7 +128,7 @@ export default function MobileLayout() {
                 </Button>
                 <Button
                   variant="ghost"
-                  className="w-full justify-start h-12 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10"
+                  className="w-full justify-start h-12 text-rose-700 dark:text-rose-400 hover:text-rose-300 hover:bg-rose-500/10"
                   onClick={handleLogout}
                 >
                   <LogOut className="h-4 w-4 mr-2" /> Sair
@@ -168,7 +168,7 @@ export default function MobileLayout() {
               className={({ isActive }) =>
                 `flex flex-col items-center justify-center gap-0.5 h-14 transition ${
                   isActive || location.pathname.startsWith("/m/orders")
-                    ? "text-blue-400"
+                    ? "text-blue-700 dark:text-blue-400"
                     : "text-muted-foreground"
                 }`
               }
@@ -181,7 +181,7 @@ export default function MobileLayout() {
               to="/m/schedule"
               className={({ isActive }) =>
                 `flex flex-col items-center justify-center gap-0.5 h-14 transition ${
-                  isActive ? "text-blue-400" : "text-muted-foreground"
+                  isActive ? "text-blue-700 dark:text-blue-400" : "text-muted-foreground"
                 }`
               }
             >
@@ -194,7 +194,7 @@ export default function MobileLayout() {
                 className={({ isActive }) =>
                   `flex flex-col items-center justify-center gap-0.5 h-14 transition ${
                     isActive || location.pathname.startsWith("/m/sales")
-                      ? "text-blue-400"
+                      ? "text-blue-700 dark:text-blue-400"
                       : "text-muted-foreground"
                   }`
                 }

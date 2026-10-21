@@ -184,7 +184,7 @@ export default function CompanySettings() {
       {/* Bloco 1: Identificação */}
       <section>
         <div className="flex items-center gap-2 mb-1">
-          <Building2 className="h-4 w-4 text-blue-400" />
+          <Building2 className="h-4 w-4 text-blue-700 dark:text-blue-400" />
           <h2 className="text-lg font-semibold">Identificação</h2>
         </div>
         <p className="text-sm text-muted-foreground mb-4">
@@ -214,7 +214,7 @@ export default function CompanySettings() {
               <div>
                 <Label className="flex items-center gap-1.5">
                   CNPJ
-                  {cnpjLoading && <Loader2 className="h-3 w-3 animate-spin text-blue-400" />}
+                  {cnpjLoading && <Loader2 className="h-3 w-3 animate-spin text-blue-700 dark:text-blue-400" />}
                 </Label>
                 <Input
                   value={form.cnpj}

@@ -168,8 +168,8 @@ export default function Services() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Tags className="h-7 w-7" /> Catálogo de Serviços
+          <h1 className="text-[22px] font-semibold tracking-tight flex items-center gap-2">
+            <Tags className="h-5 w-5 text-primary" /> Catálogo de Serviços
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Itens reutilizáveis em vendas e ordens de serviço (limpeza, recarga,
@@ -316,7 +316,7 @@ export default function Services() {
                 </TableCell>
                 <TableCell>
                   {s.active
-                    ? <Badge className="bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30 hover:bg-emerald-500/25">Ativo</Badge>
+                    ? <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-500/30 hover:bg-emerald-500/25">Ativo</Badge>
                     : <Badge variant="secondary">Inativo</Badge>}
                 </TableCell>
                 <TableCell className="text-right">

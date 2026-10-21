@@ -116,7 +116,7 @@ export default function MobileOrderNew() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="flex items-center gap-2 flex-1">
-          <Wrench className="h-5 w-5 text-blue-400" />
+          <Wrench className="h-5 w-5 text-blue-700 dark:text-blue-400" />
           <h1 className="font-semibold">Nova OS</h1>
         </div>
       </header>

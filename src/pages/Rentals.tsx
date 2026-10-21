@@ -98,8 +98,8 @@ export default function Rentals() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Repeat className="h-7 w-7" /> Locações
+          <h1 className="text-[22px] font-semibold tracking-tight flex items-center gap-2">
+            <Repeat className="h-5 w-5 text-primary" /> Locações
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Contratos de aluguel mensal de equipamentos. Gere fatura mensal manualmente quando estiver pronto.
@@ -117,20 +117,20 @@ export default function Rentals() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs text-muted-foreground flex items-center gap-1"><Repeat className="h-3 w-3" /> Contratos ativos</div>
-          <div className="text-2xl font-bold mt-1 text-emerald-400">{stats.activeCount}</div>
+          <div className="text-2xl font-semibold tracking-tight mt-1 text-emerald-700 dark:text-emerald-400">{stats.activeCount}</div>
         </div>
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs text-muted-foreground flex items-center gap-1"><Boxes className="h-3 w-3" /> Equipamentos locados</div>
-          <div className="text-2xl font-bold mt-1">{stats.totalEquip}</div>
+          <div className="text-2xl font-semibold tracking-tight mt-1">{stats.totalEquip}</div>
         </div>
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs text-muted-foreground flex items-center gap-1"><Receipt className="h-3 w-3" /> Receita recorrente</div>
-          <div className="text-2xl font-bold mt-1">{formatBRL(stats.recurringRevenue)}</div>
+          <div className="text-2xl font-semibold tracking-tight mt-1">{formatBRL(stats.recurringRevenue)}</div>
           <div className="text-[11px] text-muted-foreground mt-0.5">por mês (sem excedentes)</div>
         </div>
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="h-3 w-3" /> Vencem em 7 dias</div>
-          <div className={`text-2xl font-bold mt-1 ${stats.upcoming > 0 ? "text-amber-400" : ""}`}>{stats.upcoming}</div>
+          <div className={`text-2xl font-semibold tracking-tight mt-1 ${stats.upcoming > 0 ? "text-amber-700 dark:text-amber-400" : ""}`}>{stats.upcoming}</div>
         </div>
       </div>
 
@@ -196,7 +196,7 @@ export default function Rentals() {
                   </TableCell>
                   <TableCell className="text-xs">
                     {c.status === "ativo" ? (
-                      <span className={dueSoon ? "text-amber-400 font-medium inline-flex items-center gap-1" : ""}>
+                      <span className={dueSoon ? "text-amber-700 dark:text-amber-400 font-medium inline-flex items-center gap-1" : ""}>
                         {dueSoon && <AlertTriangle className="h-3 w-3" />}
                         {next.toLocaleDateString("pt-BR")}
                       </span>

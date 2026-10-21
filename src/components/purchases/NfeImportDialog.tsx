@@ -337,7 +337,7 @@ export default function NfeImportDialog({ open, onOpenChange, onImported }: NfeI
               <div className="rounded-lg border p-4">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-3">
-                    <Truck className="h-5 w-5 text-blue-400" />
+                    <Truck className="h-5 w-5 text-blue-700 dark:text-blue-400" />
                     <div>
                       <div className="text-xs text-muted-foreground">Fornecedor</div>
                       <div className="font-medium">{nfe.emitente.razao_social}</div>
@@ -347,7 +347,7 @@ export default function NfeImportDialog({ open, onOpenChange, onImported }: NfeI
                     </div>
                   </div>
                   {supplier ? (
-                    <Badge className="bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30">
+                    <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-500/30">
                       <CheckCircle2 className="h-3 w-3 mr-1" /> Cadastrado
                     </Badge>
                   ) : (
@@ -466,7 +466,7 @@ function NfeRow({
       <TableCell>
         {match.product ? (
           <div className="flex items-center gap-2">
-            <Package className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+            <Package className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" />
             <div className="flex flex-col min-w-0">
               <span className="text-xs font-medium truncate">{match.product.name}</span>
               <span className="text-[10px] text-muted-foreground">
@@ -476,7 +476,7 @@ function NfeRow({
           </div>
         ) : (
           <div className="flex flex-col gap-1.5">
-            <Badge className="bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30 w-fit text-[10px]">
+            <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500/30 w-fit text-[10px]">
               <AlertTriangle className="h-3 w-3 mr-1" /> Não encontrado
             </Badge>
             <div className="flex gap-1">

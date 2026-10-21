@@ -59,31 +59,31 @@ import { useReceivablesOverview } from "@/hooks/useReceivablesOverview";
  * Itens "Em breve": Agenda, Relatórios — ainda não foram refeitos pra Delvor.
  */
 const navigation = [
-  { name: "Dashboard",    href: "/dashboard",      icon: Home,         roles: ["admin", "gerente", "vendedor", "tecnico", "user", "financeiro"] },
-  { name: "Clientes",     href: "/customers",      icon: Building2,    roles: ["admin", "gerente", "vendedor", "tecnico", "user"], verticals: ["assistencia_tecnica", "deposito_construcao"] },
+  { name: "Dashboard",    href: "/dashboard",      group: "Operação", icon: Home,         roles: ["admin", "gerente", "vendedor", "tecnico", "user", "financeiro"] },
+  { name: "Clientes",     href: "/customers",      group: "Operação", icon: Building2,    roles: ["admin", "gerente", "vendedor", "tecnico", "user"], verticals: ["assistencia_tecnica", "deposito_construcao"] },
   // --- Auto Escola ---
-  { name: "Alunos",       href: "/students",       icon: GraduationCap, roles: ["admin", "gerente", "vendedor", "tecnico", "user"], verticals: ["auto_escola"] },
-  { name: "Matrículas",   href: "/enrollments",    icon: ClipboardList, roles: ["admin", "gerente", "vendedor", "tecnico", "user"], verticals: ["auto_escola"] },
-  { name: "Chat",         href: "/chat",           icon: MessageSquare, isChat: true, roles: ["admin", "gerente", "vendedor", "user"] },
-  { name: "OS",           href: "/service-orders", icon: Wrench,       roles: ["admin", "gerente", "vendedor", "tecnico", "user"], verticals: ["assistencia_tecnica"] },
-  { name: "Agenda",       href: "/schedule",       icon: Calendar,     roles: ["admin", "gerente", "vendedor", "tecnico", "user"] },
-  { name: "PDV / Vendas", href: "/pdv",            icon: Wallet,       roles: ["admin", "gerente", "vendedor", "user"] },
-  { name: "Orçamentos",   href: "/orcamentos",     icon: FileText,     roles: ["admin", "gerente", "vendedor", "user"] },
-  { name: "Locações",     href: "/rentals",        icon: Repeat,       roles: ["admin", "gerente", "vendedor", "tecnico", "user"], verticals: ["assistencia_tecnica"] },
-  { name: "Estoque",      href: "/products",       icon: Package,      roles: ["admin", "gerente", "tecnico"], verticals: ["assistencia_tecnica", "deposito_construcao"] },
-  { name: "Catálogo",     href: "/services",       icon: Tags,         roles: ["admin", "gerente"], verticals: ["assistencia_tecnica"] },
-  { name: "Fornecedores", href: "/suppliers",      icon: Truck,        roles: ["admin", "gerente"], verticals: ["assistencia_tecnica", "deposito_construcao"] },
-  { name: "Compras",      href: "/purchases",      icon: PackageOpen,  roles: ["admin", "gerente"], verticals: ["assistencia_tecnica", "deposito_construcao"] },
+  { name: "Alunos",       href: "/students",       group: "Operação", icon: GraduationCap, roles: ["admin", "gerente", "vendedor", "tecnico", "user"], verticals: ["auto_escola"] },
+  { name: "Matrículas",   href: "/enrollments",    group: "Operação", icon: ClipboardList, roles: ["admin", "gerente", "vendedor", "tecnico", "user"], verticals: ["auto_escola"] },
+  { name: "Chat",         href: "/chat",           group: "Operação", icon: MessageSquare, isChat: true, roles: ["admin", "gerente", "vendedor", "user"] },
+  { name: "OS",           href: "/service-orders", group: "Operação", icon: Wrench,       roles: ["admin", "gerente", "vendedor", "tecnico", "user"], verticals: ["assistencia_tecnica"] },
+  { name: "Agenda",       href: "/schedule",       group: "Operação", icon: Calendar,     roles: ["admin", "gerente", "vendedor", "tecnico", "user"] },
+  { name: "PDV / Vendas", href: "/pdv",            group: "Vendas", icon: Wallet,       roles: ["admin", "gerente", "vendedor", "user"] },
+  { name: "Orçamentos",   href: "/orcamentos",     group: "Vendas", icon: FileText,     roles: ["admin", "gerente", "vendedor", "user"] },
+  { name: "Locações",     href: "/rentals",        group: "Vendas", icon: Repeat,       roles: ["admin", "gerente", "vendedor", "tecnico", "user"], verticals: ["assistencia_tecnica"] },
+  { name: "Estoque",      href: "/products",       group: "Estoque", icon: Package,      roles: ["admin", "gerente", "tecnico"], verticals: ["assistencia_tecnica", "deposito_construcao"] },
+  { name: "Catálogo",     href: "/services",       group: "Estoque", icon: Tags,         roles: ["admin", "gerente"], verticals: ["assistencia_tecnica"] },
+  { name: "Fornecedores", href: "/suppliers",      group: "Estoque", icon: Truck,        roles: ["admin", "gerente"], verticals: ["assistencia_tecnica", "deposito_construcao"] },
+  { name: "Compras",      href: "/purchases",      group: "Estoque", icon: PackageOpen,  roles: ["admin", "gerente"], verticals: ["assistencia_tecnica", "deposito_construcao"] },
   // Núcleo (todos os ramos, sem add-on): badge = vencidos / vencendo hoje
-  { name: "Contas a receber", href: "/financeiro/receber", icon: HandCoins, badge: "receivables", roles: ["admin", "gerente", "financeiro"] },
-  { name: "Contas fixas",   href: "/financeiro/fixas",      icon: CalendarClock, addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
-  { name: "Contas variáveis", href: "/financeiro/variaveis", icon: Receipt,      addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
-  { name: "Categorias fin.",href: "/financeiro/categorias", icon: Tags,          addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
-  { name: "Precificação",   href: "/financeiro/precificacao", icon: Calculator,  addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
-  { name: "Relatórios",   href: "/reports",        icon: BarChart3,    roles: ["admin", "gerente"] },
-  { name: "Equipe",       href: "/team",           icon: Users,        roles: ["admin"] },
-  { name: "Configurações",href: "/settings",       icon: Settings,     roles: ["admin"] },
-  { name: "Ajuda",        href: "/ajuda",          icon: CircleHelp,   roles: ["admin", "gerente", "vendedor", "tecnico", "user"] },
+  { name: "Contas a receber", href: "/financeiro/receber", group: "Financeiro", icon: HandCoins, badge: "receivables", roles: ["admin", "gerente", "financeiro"] },
+  { name: "Contas fixas",   href: "/financeiro/fixas",      group: "Financeiro", icon: CalendarClock, addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
+  { name: "Contas variáveis", href: "/financeiro/variaveis", group: "Financeiro", icon: Receipt,      addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
+  { name: "Categorias fin.",href: "/financeiro/categorias", group: "Financeiro", icon: Tags,          addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
+  { name: "Precificação",   href: "/financeiro/precificacao", group: "Financeiro", icon: Calculator,  addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
+  { name: "Relatórios",   href: "/reports",        group: "Financeiro", icon: BarChart3,    roles: ["admin", "gerente"] },
+  { name: "Equipe",       href: "/team",           group: "Gestão", icon: Users,        roles: ["admin"] },
+  { name: "Configurações",href: "/settings",       group: "Gestão", icon: Settings,     roles: ["admin"] },
+  { name: "Ajuda",        href: "/ajuda",          group: "Gestão", icon: CircleHelp,   roles: ["admin", "gerente", "vendedor", "tecnico", "user"] },
 ];
 
 export default function Sidebar() {
@@ -492,6 +492,13 @@ useEffect(() => {
     if ((item as any).addonCode === "financeiro" && !financeiroAddon.active) return false;
     return true;
   });
+  const navGroups = filteredNavigation.reduce<{ name: string; items: typeof filteredNavigation }[]>((acc, item) => {
+    const name = (item as any).group || "Outros";
+    const last = acc[acc.length - 1];
+    if (last && last.name === name) last.items.push(item);
+    else acc.push({ name, items: [item] });
+    return acc;
+  }, []);
 
 const totalBellUnread = useMemo(() => sysUnreadCount + msgUnreadCount, [sysUnreadCount, msgUnreadCount]);
 
@@ -583,18 +590,21 @@ function openAgenda(taskId?: string) {
   const itemBase = `
     flex items-center gap-3
     rounded-lg
-    py-2.5
+    py-2
     ${lgPx3}
     text-sm font-medium
     ${lgJustifyStart}
-    transition-all
+    transition-colors
     text-sidebar-foreground
-    hover:bg-sidebar-accent
+    hover:bg-sidebar-accent/60
+    hover:text-sidebar-accent-foreground
   `;
 
   const itemActive = `
-    bg-sidebar-primary
-    text-sidebar-primary-foreground
+    nav-active
+    bg-sidebar-accent
+    text-sidebar-accent-foreground
+    font-semibold
   `;
 
   return (
@@ -645,8 +655,16 @@ function openAgenda(taskId?: string) {
 
       {/* NAV */}
       {/* Em telas baixas (ex.: 768px), permite rolagem sem "quebrar" o layout */}
-      <nav className="flex-1 overflow-y-auto space-y-1 py-3 px-2 lg:px-3">
-        {filteredNavigation.map((item) => {
+      <nav className="flex-1 overflow-y-auto py-3 px-2 lg:px-3">
+        {navGroups.map((g, gi) => (
+        <div key={g.name} className="space-y-0.5">
+          {!collapsed && (
+            <div className={`hidden lg:block px-3 pb-1 ${gi === 0 ? "pt-0" : "pt-4"} text-[10.5px] font-semibold uppercase tracking-wider text-sidebar-foreground/55`}>
+              {g.name}
+            </div>
+          )}
+          {gi > 0 && <div className={`${collapsed ? "" : "lg:hidden"} mx-2 my-2 h-px bg-sidebar-border`} />}
+          {g.items.map((item) => {
           const Icon = item.icon;
           const blocked = isOnboarding && !isPathAllowed(item.href);
           const isHighlighted = isOnboarding && item.href === allowedPath;
@@ -718,7 +736,9 @@ function openAgenda(taskId?: string) {
               <span className={lgShowInline}>{item.name}</span>
             </NavLink>
           );
-        })}
+          })}
+        </div>
+        ))}
       </nav>
 
       {/* FOOTER */}

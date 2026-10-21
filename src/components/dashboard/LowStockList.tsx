@@ -17,7 +17,7 @@ export default function LowStockList({ products, limit = 8 }: LowStockListProps)
   return (
     <div className="rounded-lg border bg-card p-4">
       <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-        <AlertTriangle className="h-4 w-4 text-amber-400" /> Estoque crítico
+        <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400" /> Estoque crítico
       </h3>
       {low.length === 0 ? (
         <div className="h-32 flex flex-col items-center justify-center text-sm text-muted-foreground gap-1">

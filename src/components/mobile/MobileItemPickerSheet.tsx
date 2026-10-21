@@ -137,7 +137,7 @@ export default function MobileItemPickerSheet({
                   onClick={() => onPick({ kind: "peca", data: p })}
                   className="w-full text-left p-3 rounded-lg active:bg-muted/30 transition flex items-center gap-3 border-b border-border/30 last:border-0"
                 >
-                  <Package className="h-4 w-4 text-amber-400 shrink-0" />
+                  <Package className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">{p.name}</div>
                     {(p.sku || p.brand) && (
@@ -165,7 +165,7 @@ export default function MobileItemPickerSheet({
                 onClick={() => onPick({ kind: "servico", data: s })}
                 className="w-full text-left p-3 rounded-lg active:bg-muted/30 transition flex items-center gap-3 border-b border-border/30 last:border-0"
               >
-                <Wrench className="h-4 w-4 text-sky-400 shrink-0" />
+                <Wrench className="h-4 w-4 text-sky-700 dark:text-sky-400 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium truncate">{s.name}</div>
                 </div>

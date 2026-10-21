@@ -317,7 +317,7 @@ export default function RentalEditor() {
       </div>
 
       {isNew && (
-        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300 flex items-start gap-2">
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2">
           <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
           Salve o contrato primeiro pra adicionar equipamentos, registrar leituras e gerar faturas.
         </div>
@@ -386,7 +386,7 @@ export default function RentalEditor() {
                         </TableCell>
                         <TableCell className="text-xs">
                           {techName ? (
-                            <span className={isMyItem ? "text-emerald-400 font-medium" : ""}>
+                            <span className={isMyItem ? "text-emerald-700 dark:text-emerald-400 font-medium" : ""}>
                               {techName}{isMyItem && " (você)"}
                             </span>
                           ) : <span className="text-muted-foreground">não atribuído</span>}

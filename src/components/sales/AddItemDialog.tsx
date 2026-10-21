@@ -165,7 +165,7 @@ export default function AddItemDialog({ open, onOpenChange, onPick }: AddItemDia
                       {canSeePricing && (
                         <div className="text-sm font-medium">{formatBRL(p.sale_price)}</div>
                       )}
-                      <div className={`text-xs ${lowStock ? "text-amber-400" : "text-muted-foreground"}`}>
+                      <div className={`text-xs ${lowStock ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}>
                         {p.stock_qty} {p.unit}
                       </div>
                     </div>
@@ -189,7 +189,7 @@ export default function AddItemDialog({ open, onOpenChange, onPick }: AddItemDia
                   className="w-full flex items-center gap-3 p-3 hover:bg-muted/50 transition text-left"
                 >
                   <div className="h-10 w-10 rounded bg-emerald-500/10 ring-1 ring-emerald-500/30 flex items-center justify-center shrink-0">
-                    <Tags className="h-4 w-4 text-emerald-400" />
+                    <Tags className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">

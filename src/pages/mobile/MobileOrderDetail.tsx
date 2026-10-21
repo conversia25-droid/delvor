@@ -625,7 +625,7 @@ export default function MobileOrderDetail() {
           )}
         </div>
         {savedFlash && (
-          <div className="text-[11px] text-emerald-400 flex items-center gap-1">
+          <div className="text-[11px] text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
             <Check className="h-3 w-3" /> Salvo
           </div>
         )}
@@ -644,7 +644,7 @@ export default function MobileOrderDetail() {
                 variant="outline"
                 size="sm"
                 onClick={openWa}
-                className="flex-1 h-10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
+                className="flex-1 h-10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
               >
                 <MessageSquare className="h-4 w-4 mr-1.5" /> WhatsApp
               </Button>
@@ -652,7 +652,7 @@ export default function MobileOrderDetail() {
                 variant="outline"
                 size="sm"
                 onClick={callPhone}
-                className="flex-1 h-10 text-sky-400 border-sky-500/30 hover:bg-sky-500/10"
+                className="flex-1 h-10 text-sky-700 dark:text-sky-400 border-sky-500/30 hover:bg-sky-500/10"
               >
                 <Phone className="h-4 w-4 mr-1.5" /> Ligar
               </Button>
@@ -681,7 +681,7 @@ export default function MobileOrderDetail() {
         {/* DEFEITO RELATADO (read-only) */}
         {os.reported_issue && (
           <section className="rounded-xl border border-border/60 bg-amber-500/5 ring-1 ring-amber-500/20 p-3">
-            <div className="text-[11px] uppercase tracking-wider text-amber-300/80 font-semibold mb-1">
+            <div className="text-[11px] uppercase tracking-wider text-amber-700/80 dark:text-amber-300/80 font-semibold mb-1">
               Defeito relatado
             </div>
             <div className="text-sm whitespace-pre-wrap">{os.reported_issue}</div>
@@ -705,7 +705,7 @@ export default function MobileOrderDetail() {
               <button
                 onClick={() => photoInputRef.current?.click()}
                 disabled={uploading}
-                className="shrink-0 snap-start h-28 w-28 rounded-xl border-2 border-dashed border-blue-500/40 bg-blue-500/5 flex flex-col items-center justify-center gap-1 text-blue-300 active:bg-blue-500/15 transition disabled:opacity-50"
+                className="shrink-0 snap-start h-28 w-28 rounded-xl border-2 border-dashed border-blue-500/40 bg-blue-500/5 flex flex-col items-center justify-center gap-1 text-blue-700 dark:text-blue-300 active:bg-blue-500/15 transition disabled:opacity-50"
               >
                 {uploading ? (
                   <Loader2 className="h-6 w-6 animate-spin" />
@@ -821,8 +821,8 @@ export default function MobileOrderDetail() {
                     <div
                       className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${
                         isPart
-                          ? "bg-amber-500/15 text-amber-300"
-                          : "bg-sky-500/15 text-sky-300"
+                          ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                          : "bg-sky-500/15 text-sky-700 dark:text-sky-300"
                       }`}
                     >
                       {isPart ? <Package className="h-4 w-4" /> : <Wrench className="h-4 w-4" />}
@@ -834,7 +834,7 @@ export default function MobileOrderDetail() {
                           {it.qty}× {canSeePricing ? formatBRL(it.unit_price) : "—"}
                         </span>
                         {it.discount > 0 && canSeePricing && (
-                          <span className="text-rose-400">−{formatBRL(it.discount)}</span>
+                          <span className="text-rose-700 dark:text-rose-400">−{formatBRL(it.discount)}</span>
                         )}
                       </div>
                     </div>
@@ -910,7 +910,7 @@ export default function MobileOrderDetail() {
               // vendedor): mostra card amigável explicando.
               !canConvert && os.status === "concluida" && (
                 <div className="rounded-xl bg-emerald-500/10 ring-1 ring-emerald-500/30 p-3 text-center space-y-1">
-                  <div className="flex items-center justify-center gap-2 text-emerald-300 font-semibold text-sm">
+                  <div className="flex items-center justify-center gap-2 text-emerald-700 dark:text-emerald-300 font-semibold text-sm">
                     <Check className="h-4 w-4" /> Serviço concluído
                   </div>
                   <p className="text-[11px] text-muted-foreground">
@@ -1078,9 +1078,9 @@ function ItemEditorSheet({
         <SheetHeader className="p-4 border-b">
           <SheetTitle className="flex items-center gap-2">
             {item.kind === "peca" ? (
-              <><Package className="h-4 w-4 text-amber-400" /> Editar peça</>
+              <><Package className="h-4 w-4 text-amber-700 dark:text-amber-400" /> Editar peça</>
             ) : (
-              <><Wrench className="h-4 w-4 text-sky-400" /> Editar serviço</>
+              <><Wrench className="h-4 w-4 text-sky-700 dark:text-sky-400" /> Editar serviço</>
             )}
           </SheetTitle>
         </SheetHeader>
@@ -1142,7 +1142,7 @@ function ItemEditorSheet({
               variant="outline"
               size="lg"
               onClick={onRemove}
-              className="text-rose-400 border-rose-500/30 hover:bg-rose-500/10"
+              className="text-rose-700 dark:text-rose-400 border-rose-500/30 hover:bg-rose-500/10"
             >
               <Trash2 className="h-4 w-4 mr-1.5" /> Remover
             </Button>

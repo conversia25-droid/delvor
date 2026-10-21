@@ -18,7 +18,7 @@ export default function TopProducts({ items }: TopProductsProps) {
   return (
     <div className="rounded-lg border bg-card p-4">
       <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-        <Trophy className="h-4 w-4 text-amber-400" /> Top produtos vendidos
+        <Trophy className="h-4 w-4 text-amber-700 dark:text-amber-400" /> Top produtos vendidos
       </h3>
       {top.length === 0 ? (
         <div className="h-32 flex items-center justify-center text-sm text-muted-foreground">

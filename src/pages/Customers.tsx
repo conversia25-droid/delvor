@@ -20,6 +20,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
 import { ensureLeadFromCustomer } from "@/lib/leads";
+import MiniBars from "@/components/charts/MiniBars";
 import { lookupCnpj, CNPJ_ERROR_MESSAGES } from "@/lib/cnpjLookup";
 import PhoneInput from "@/components/PhoneInput";
 
@@ -238,6 +239,36 @@ export default function Customers() {
   }, [companyId]);
 
   /* ============== FILTRO ============== */
+  /* Resumo da carteira: novos no mês, com WhatsApp, bloqueados e entrada por mês. */
+  const summary = useMemo(() => {
+    const now = new Date();
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const MES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+    const keys = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    });
+    const perMonth = new Map<string, number>();
+    let newMonth = 0, withWa = 0, blocked = 0, pj = 0;
+    for (const c of items as any[]) {
+      const k = String(c.created_at || "").slice(0, 7);
+      perMonth.set(k, (perMonth.get(k) || 0) + 1);
+      if (k === monthKey) newMonth++;
+      if (c.whatsapp || c.remote_jid) withWa++;
+      if (c.blocked) blocked++;
+      if (c.person_type === "PJ") pj++;
+    }
+    return {
+      total: items.length, newMonth, withWa, blocked, pj,
+      chart: keys.map((k) => ({
+        key: k,
+        label: `${MES[Number(k.slice(5, 7)) - 1]}/${k.slice(2, 4)}`,
+        detail: `${MES[Number(k.slice(5, 7)) - 1]} de ${k.slice(0, 4)}`,
+        value: perMonth.get(k) || 0,
+      })),
+    };
+  }, [items]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter((c) => {
@@ -395,8 +426,8 @@ export default function Customers() {
       {/* Cabeçalho */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Users className="h-7 w-7" /> Clientes
+          <h1 className="text-[22px] font-semibold tracking-tight flex items-center gap-2">
+            <Users className="h-5 w-5 text-primary" /> Clientes
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Cadastro de pessoas físicas e jurídicas. Vincule equipamentos para
@@ -447,7 +478,7 @@ export default function Customers() {
                   <div>
                     <Label className="flex items-center gap-1.5">
                       {form.person_type === "PJ" ? "CNPJ" : "CPF"}
-                      {cnpjLoading && <Loader2 className="h-3 w-3 animate-spin text-blue-400" />}
+                      {cnpjLoading && <Loader2 className="h-3 w-3 animate-spin text-blue-700 dark:text-blue-400" />}
                     </Label>
                     <Input
                       value={form.document}
@@ -677,7 +708,7 @@ export default function Customers() {
                         onChange={(e) => setForm((f) => ({ ...f, is_internal: e.target.checked }))}
                       />
                       <div className="text-sm">
-                        <div className="font-medium text-amber-300">Cliente interno (ativos da empresa)</div>
+                        <div className="font-medium text-amber-700 dark:text-amber-300">Cliente interno (ativos da empresa)</div>
                         <div className="text-xs text-muted-foreground mt-0.5">
                           Use isso pra cadastrar a própria empresa como "cliente" para registrar
                           equipamentos internos e atribuir técnicos. Não aparece em vendas e
@@ -716,6 +747,42 @@ export default function Customers() {
           </Dialog>
         </div>
       </div>
+
+      {/* Resumo da carteira */}
+      {summary.total > 0 && (
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-[10px] border bg-card p-4">
+              <div className="text-xs text-muted-foreground">Clientes cadastrados</div>
+              <div className="text-2xl font-semibold tracking-tight mt-1">{summary.total.toLocaleString("pt-BR")}</div>
+              <div className="mt-1 text-xs text-muted-foreground">{summary.pj} PJ · {summary.total - summary.pj} PF</div>
+            </div>
+            <div className="rounded-[10px] border bg-card p-4">
+              <div className="text-xs text-muted-foreground">Novos no mês</div>
+              <div className="text-2xl font-semibold tracking-tight mt-1">{summary.newMonth}</div>
+            </div>
+            <div className="rounded-[10px] border bg-card p-4">
+              <div className="text-xs text-muted-foreground">Com WhatsApp</div>
+              <div className="text-2xl font-semibold tracking-tight mt-1">{summary.withWa}</div>
+              <div className="mt-1 text-xs text-muted-foreground">{Math.round((summary.withWa / summary.total) * 100)}% da carteira</div>
+            </div>
+            <div className="rounded-[10px] border bg-card p-4">
+              <div className="text-xs text-muted-foreground">Bloqueados</div>
+              <div className="text-2xl font-semibold tracking-tight mt-1">{summary.blocked}</div>
+              <div className="mt-1 text-xs text-muted-foreground">{summary.blocked ? "inadimplência ou outro motivo" : "nenhum"}</div>
+            </div>
+          </div>
+          <MiniBars
+            title="Clientes novos por mês"
+            sub="últimos 6 meses"
+            data={summary.chart}
+            format={(v) => v.toLocaleString("pt-BR")}
+            height={176}
+            showValues
+            empty="Nenhum cliente novo nos últimos 6 meses."
+          />
+        </div>
+      )}
 
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-3">
@@ -789,7 +856,7 @@ export default function Customers() {
                       <span className="flex items-center gap-1.5">
                         {c.name}
                         {c.is_internal && (
-                          <Badge className="bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30 text-[10px] py-0">
+                          <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500/30 text-[10px] py-0">
                             Interno
                           </Badge>
                         )}

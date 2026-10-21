@@ -10,17 +10,17 @@ import { formatBRL } from "@/lib/formatters";
 
 /* ── rótulos de status ── */
 const SUB_STATUS: Record<string, { label: string; cls: string }> = {
-  trialing:  { label: "Em teste",            cls: "text-sky-400" },
-  active:    { label: "Ativa",               cls: "text-emerald-400" },
-  past_due:  { label: "Pagamento atrasado",  cls: "text-amber-400" },
-  expired:   { label: "Expirada",            cls: "text-rose-400" },
-  canceled:  { label: "Cancelada",           cls: "text-rose-400" },
-  suspended: { label: "Suspensa",            cls: "text-rose-400" },
+  trialing:  { label: "Em teste",            cls: "text-sky-700 dark:text-sky-400" },
+  active:    { label: "Ativa",               cls: "text-emerald-700 dark:text-emerald-400" },
+  past_due:  { label: "Pagamento atrasado",  cls: "text-amber-700 dark:text-amber-400" },
+  expired:   { label: "Expirada",            cls: "text-rose-700 dark:text-rose-400" },
+  canceled:  { label: "Cancelada",           cls: "text-rose-700 dark:text-rose-400" },
+  suspended: { label: "Suspensa",            cls: "text-rose-700 dark:text-rose-400" },
 };
 const INV_STATUS: Record<string, { label: string; cls: string }> = {
-  open:     { label: "Aberta",     cls: "bg-sky-500/15 text-sky-300 ring-sky-500/30" },
-  paid:     { label: "Paga",       cls: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30" },
-  overdue:  { label: "Vencida",    cls: "bg-amber-500/15 text-amber-300 ring-amber-500/30" },
+  open:     { label: "Aberta",     cls: "bg-sky-500/15 text-sky-700 dark:text-sky-300 ring-sky-500/30" },
+  paid:     { label: "Paga",       cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 ring-emerald-500/30" },
+  overdue:  { label: "Vencida",    cls: "bg-amber-500/15 text-amber-700 dark:text-amber-300 ring-amber-500/30" },
   refunded: { label: "Estornada",  cls: "bg-zinc-500/15 text-zinc-300 ring-zinc-500/30" },
   canceled: { label: "Cancelada",  cls: "bg-zinc-500/15 text-zinc-300 ring-zinc-500/30" },
   void:     { label: "Cancelada",  cls: "bg-zinc-500/15 text-zinc-300 ring-zinc-500/30" },
@@ -114,7 +114,7 @@ export default function BillingSettings() {
 
   const sub = SUB_STATUS[summary?.subscription_status as string] || {
     label: summary?.subscription_status || "Teste grátis",
-    cls: "text-sky-400",
+    cls: "text-sky-700 dark:text-sky-400",
   };
   const valor =
     summary?.monthly_amount_cents != null
@@ -130,7 +130,7 @@ export default function BillingSettings() {
       {/* assinatura */}
       <div className="rounded-lg border bg-card p-5">
         <div className="flex items-center gap-2 mb-4">
-          <CreditCard className="h-5 w-5 text-blue-400" />
+          <CreditCard className="h-5 w-5 text-blue-700 dark:text-blue-400" />
           <h2 className="font-semibold">Sua assinatura</h2>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -146,7 +146,7 @@ export default function BillingSettings() {
         {/* próxima cobrança — explícito */}
         <div className="mt-4 rounded-md bg-blue-500/10 ring-1 ring-blue-500/30 px-3 py-2.5 text-sm">
           {!hasPrice ? (
-            <span className="text-amber-400">
+            <span className="text-amber-700 dark:text-amber-400">
               O valor da mensalidade ainda não foi definido neste plano — fale com o suporte.
             </span>
           ) : isTrial ? (
@@ -215,7 +215,7 @@ export default function BillingSettings() {
                         <a href={inv.payment_link} target="_blank" rel="noreferrer">Pagar</a>
                       </Button>
                     )}
-                    {inv.status === "paid" && <CheckCircle2 className="h-4 w-4 text-emerald-400" />}
+                    {inv.status === "paid" && <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />}
                   </div>
                 </div>
               );

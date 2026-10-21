@@ -240,7 +240,7 @@ export default function FullCustomerDialog({
             <div>
               <Label className="flex items-center gap-1.5">
                 {form.person_type === "PJ" ? "CNPJ" : "CPF"}
-                {cnpjLoading && <Loader2 className="h-3 w-3 animate-spin text-blue-400" />}
+                {cnpjLoading && <Loader2 className="h-3 w-3 animate-spin text-blue-700 dark:text-blue-400" />}
               </Label>
               <Input
                 value={form.document}
@@ -440,7 +440,7 @@ export default function FullCustomerDialog({
                   onChange={(e) => setForm((f) => ({ ...f, is_internal: e.target.checked }))}
                 />
                 <div className="text-sm">
-                  <div className="font-medium text-amber-300">Cliente interno (ativos da empresa)</div>
+                  <div className="font-medium text-amber-700 dark:text-amber-300">Cliente interno (ativos da empresa)</div>
                   <div className="text-xs text-muted-foreground mt-0.5">
                     Use isso pra cadastrar a própria empresa como "cliente" para registrar
                     equipamentos internos e atribuir técnicos. Não aparece em vendas e

@@ -291,7 +291,7 @@ export default function CashAdminTab() {
                         ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
                         : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
                       <div className="h-10 w-10 rounded-full bg-emerald-500/15 ring-1 ring-emerald-500/30 flex items-center justify-center shrink-0">
-                        <Wallet className="h-5 w-5 text-emerald-400" />
+                        <Wallet className="h-5 w-5 text-emerald-700 dark:text-emerald-400" />
                       </div>
                       <div className="min-w-0">
                         <div className="font-medium flex items-center gap-2">
@@ -331,8 +331,8 @@ export default function CashAdminTab() {
                       <span>💳 Cartão {formatBRL(sum.card_in)}</span>
                       <span>📱 Pix {formatBRL(sum.pix_in)}</span>
                       {sum.other_in > 0 && <span>Outros {formatBRL(sum.other_in)}</span>}
-                      {sum.suprimentos > 0 && <span className="text-emerald-400">+ Supr. {formatBRL(sum.suprimentos)}</span>}
-                      {sum.sangrias > 0 && <span className="text-rose-400">− Sangr. {formatBRL(sum.sangrias)}</span>}
+                      {sum.suprimentos > 0 && <span className="text-emerald-700 dark:text-emerald-400">+ Supr. {formatBRL(sum.suprimentos)}</span>}
+                      {sum.sangrias > 0 && <span className="text-rose-700 dark:text-rose-400">− Sangr. {formatBRL(sum.sangrias)}</span>}
                     </div>
                   )}
 
@@ -386,7 +386,7 @@ export default function CashAdminTab() {
                       </span>
                       <Badge
                         variant="outline"
-                        className={`text-[10px] gap-1 ${ok ? "text-emerald-400" : "text-amber-400"}`}
+                        className={`text-[10px] gap-1 ${ok ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}`}
                       >
                         {ok ? <CheckCircle2 className="h-2.5 w-2.5" /> : <AlertTriangle className="h-2.5 w-2.5" />}
                         {ok ? "Conferido" : `Dif. ${formatBRL(diff)}`}
@@ -401,7 +401,7 @@ export default function CashAdminTab() {
                           <span>Fundo {formatBRL(s.opening_amount)}</span>
                           <span>Esperado {formatBRL(s.expected_cash || 0)}</span>
                           <span>Contado {formatBRL(s.closing_amount || 0)}</span>
-                          <span className={ok ? "text-emerald-400" : "text-amber-400"}>
+                          <span className={ok ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}>
                             Diferença {formatBRL(diff)}
                           </span>
                         </div>
@@ -484,8 +484,8 @@ export default function CashAdminTab() {
               {closeAmount && (
                 <div className={`text-sm rounded-md p-2 ${
                   Math.abs(moneyInput(closeAmount) - (summaries[closeTarget.id]?.expected_cash || 0)) < 0.01
-                    ? "bg-emerald-500/10 text-emerald-300"
-                    : "bg-amber-500/10 text-amber-300"
+                    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                    : "bg-amber-500/10 text-amber-700 dark:text-amber-300"
                 }`}>
                   Diferença: {formatBRL(moneyInput(closeAmount) - (summaries[closeTarget.id]?.expected_cash || 0))}
                 </div>

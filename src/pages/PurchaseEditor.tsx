@@ -477,7 +477,7 @@ export default function PurchaseEditor() {
       </div>
 
       {status === "recebida" && (
-        <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-300 flex items-start gap-2">
+        <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-700 dark:text-emerald-300 flex items-start gap-2">
           <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
           <span>
             Mercadoria já recebida. Os itens foram lançados no estoque e o custo de cada produto foi atualizado.
@@ -538,7 +538,7 @@ export default function PurchaseEditor() {
       </AlertDialog>
 
       {!editable && status !== "recebida" && status !== "cancelada" && (
-        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300 flex items-start gap-2">
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2">
           <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
           Esta compra não pode mais ser editada.
         </div>

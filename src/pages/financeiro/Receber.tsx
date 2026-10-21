@@ -58,14 +58,14 @@ function DuePill({ due }: { due: string | null }) {
   const d = daysUntil(due);
   if (d < 0) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 text-xs font-medium text-rose-400">
+      <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 text-xs font-medium text-rose-700 dark:text-rose-400">
         <AlertTriangle className="h-3 w-3" /> venceu há {-d} dia{d === -1 ? "" : "s"}
       </span>
     );
   }
   if (d === 0) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-400">
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
         <CalendarClock className="h-3 w-3" /> vence hoje
       </span>
     );
@@ -81,8 +81,8 @@ function Tile({
   active?: boolean; onClick?: () => void;
 }) {
   const tones = {
-    rose: "text-rose-400", amber: "text-amber-400", sky: "text-sky-400",
-    emerald: "text-emerald-400", default: "text-foreground",
+    rose: "text-rose-700 dark:text-rose-400", amber: "text-amber-700 dark:text-amber-400", sky: "text-sky-700 dark:text-sky-400",
+    emerald: "text-emerald-700 dark:text-emerald-400", default: "text-foreground",
   } as const;
   const Comp: any = onClick ? "button" : "div";
   return (
@@ -508,21 +508,21 @@ export default function Receber() {
                     <TableCell>
                       <span>{METHOD_LABELS[r.method] || r.method}</span>
                       {r.anticipated && (
-                        <span className="ml-1.5 inline-flex items-center gap-0.5 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-400">
+                        <span className="ml-1.5 inline-flex items-center gap-0.5 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 dark:text-sky-400">
                           <Zap className="h-2.5 w-2.5" /> antecipado
                         </span>
                       )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums text-muted-foreground">{formatBRL(r.amount)}</TableCell>
                     <TableCell className="text-right font-medium tabular-nums">{formatBRL(r.received_amount ?? r.amount)}</TableCell>
-                    <TableCell className={`text-right tabular-nums ${r.fee_amount > 0 ? "text-rose-400" : "text-muted-foreground"}`}>
+                    <TableCell className={`text-right tabular-nums ${r.fee_amount > 0 ? "text-rose-700 dark:text-rose-400" : "text-muted-foreground"}`}>
                       {r.fee_amount > 0 ? `−${formatBRL(r.fee_amount)}` : "—"}
                     </TableCell>
                     <TableCell className="text-xs">
                       {!r.cash_session_id ? (
                         <span className="text-muted-foreground">fora do caixa</span>
                       ) : r.cash_session_open ? (
-                        <span className="text-emerald-400">caixa aberto</span>
+                        <span className="text-emerald-700 dark:text-emerald-400">caixa aberto</span>
                       ) : (
                         <span className="text-muted-foreground">caixa fechado</span>
                       )}
@@ -545,7 +545,7 @@ export default function Receber() {
                 <TableCell colSpan={4}>Total ({paidRows.length})</TableCell>
                 <TableCell className="text-right tabular-nums">{formatBRL(paidTotals.gross)}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatBRL(paidTotals.net)}</TableCell>
-                <TableCell className="text-right tabular-nums text-rose-400">
+                <TableCell className="text-right tabular-nums text-rose-700 dark:text-rose-400">
                   {paidTotals.fee > 0 ? `−${formatBRL(paidTotals.fee)}` : "—"}
                 </TableCell>
                 <TableCell colSpan={2} />
@@ -587,13 +587,13 @@ export default function Receber() {
             </div>
 
             {diff < -0.004 && (
-              <p className="text-xs text-rose-400">
+              <p className="text-xs text-rose-700 dark:text-rose-400">
                 Taxa / desconto: {formatBRL(-diff)} ({((-diff / baixaGross) * 100).toFixed(2).replace(".", ",")}%)
                 {baixaRows.some((r) => r.method === "cartao_credito") ? ". Se for antecipação, fica marcado como antecipado." : ""}
               </p>
             )}
             {diff > 0.004 && (
-              <p className="text-xs text-emerald-400">Juros / multa: +{formatBRL(diff)}</p>
+              <p className="text-xs text-emerald-700 dark:text-emerald-400">Juros / multa: +{formatBRL(diff)}</p>
             )}
             {Math.abs(diff) <= 0.004 && (
               <p className="text-xs text-muted-foreground">

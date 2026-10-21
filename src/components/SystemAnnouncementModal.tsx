@@ -22,13 +22,13 @@ type MappingRow = { announcement_id: string; company_id: string };
 function getIcon(severity?: string | null) {
   switch ((severity || "info").toLowerCase()) {
     case "critical":
-      return <AlertTriangle className="h-5 w-5 shrink-0 text-red-400" />;
+      return <AlertTriangle className="h-5 w-5 shrink-0 text-red-700 dark:text-red-400" />;
     case "warning":
-      return <Wrench className="h-5 w-5 shrink-0 text-amber-400" />;
+      return <Wrench className="h-5 w-5 shrink-0 text-amber-700 dark:text-amber-400" />;
     case "success":
-      return <Megaphone className="h-5 w-5 shrink-0 text-emerald-400" />;
+      return <Megaphone className="h-5 w-5 shrink-0 text-emerald-700 dark:text-emerald-400" />;
     default:
-      return <Info className="h-5 w-5 shrink-0 text-blue-400" />;
+      return <Info className="h-5 w-5 shrink-0 text-blue-700 dark:text-blue-400" />;
   }
 }
 

@@ -1,164 +1,128 @@
+/* =====================================================================
+   Dashboard (repaginada 2026-10)
+   Arquivo idêntico no Delvor e no InfnityServices: tipos locais (sem
+   @/types/*) e cor de marca só por token (bg-primary etc.).
+   Três visões: técnico, vendedor, gestor (admin/gerente/financeiro).
+===================================================================== */
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  AlertTriangle,
-  Boxes,
-  CalendarDays,
-  CheckCircle2,
-  Clock,
-  DollarSign,
-  FileText,
-  HandCoins,
-  PackageOpen,
-  Percent,
-  Plus,
-  RefreshCw,
-  ShoppingCart,
-  TrendingUp,
-  Users,
-  Wallet,
-  Wrench,
-  Zap,
+  CheckCircle2, Clock, DollarSign, FileText, PackageOpen, Percent, RefreshCw,
+  ShoppingCart, Wallet, Wrench,
 } from "lucide-react";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useReceivablesOverview } from "@/hooks/useReceivablesOverview";
+import { useVertical } from "@/hooks/useVertical";
 
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
 import StatCard from "@/components/dashboard/StatCard";
-import RevenueChart from "@/components/dashboard/RevenueChart";
-import OsStatusDonut from "@/components/dashboard/OsStatusDonut";
-import TopProducts from "@/components/dashboard/TopProducts";
-import TopSellers from "@/components/dashboard/TopSellers";
-import CriticalOsList from "@/components/dashboard/CriticalOsList";
-import LowStockList from "@/components/dashboard/LowStockList";
 import FinanceiroDashboardCard from "@/components/dashboard/FinanceiroDashboardCard";
 import UpcomingBillsStrip from "@/components/dashboard/UpcomingBillsStrip";
+import {
+  AttentionPanel, CashTodayPanel, OsStagesPanel, Panel, PanelLink, RankPanel,
+  ReceivablesAgingPanel, RecentOsPanel, SoldReceivedChart, StatusPill, StockCriticalPanel,
+  isOsLate, lowStockOf, type AttentionItem, type Tone,
+} from "@/components/dashboard/panels";
 
-import type { Product, Sale, SaleItem, SaleStatus, ServiceOrder } from "@/types/delvor";
-import { SALE_STATUS_LABELS } from "@/types/delvor";
 import { formatBRL, formatDateBR } from "@/lib/formatters";
 import { getOpenSession, type CashSession } from "@/lib/cashRegister";
+import { fetchReceivedDaily, localISODate } from "@/lib/receivables";
 
+/* ---------- tipos locais ---------- */
+type SaleRow = {
+  id: string; number: number; status: string; total: number; issue_date: string;
+  seller_id: string | null; created_at: string; commission_amount?: number | null;
+  customers?: { name: string } | null;
+};
+type OsRow = {
+  id: string; number: number; status: string; due_at?: string | null; delivered_at?: string | null;
+  finished_at?: string | null; updated_at?: string | null; created_at: string;
+  technician_id?: string | null; reported_issue?: string | null; customers?: { name: string } | null;
+};
+type ProductRow = {
+  id: string; name: string; sku?: string | null; active: boolean;
+  stock_qty: number; stock_min: number | null; cost_price?: number | null;
+};
+type SaleItemRow = { product_id: string | null; description: string; qty: number; total: number };
+
+/* ---------- período ---------- */
 type Period = "month" | "30d" | "90d" | "1y";
-
-const PERIOD_LABELS: Record<Period, string> = {
-  month: "Este mês",
-  "30d": "30 dias",
-  "90d": "90 dias",
-  "1y": "1 ano",
-};
-
-/** Data ISO (YYYY-MM-DD) do início do período pra filtrar issue_date. */
-function periodStartDate(p: Period): string {
-  if (p === "month") {
-    const d = new Date();
-    d.setDate(1);
-    d.setHours(0, 0, 0, 0);
-    return d.toISOString().slice(0, 10);
-  }
-  const days = p === "30d" ? 30 : p === "90d" ? 90 : 365;
+const PERIODS: { key: Period; label: string }[] = [
+  { key: "month", label: "Este mês" },
+  { key: "30d", label: "30 dias" },
+  { key: "90d", label: "90 dias" },
+  { key: "1y", label: "1 ano" },
+];
+function periodStart(p: Period): string {
   const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
+  if (p === "month") return localISODate(new Date(d.getFullYear(), d.getMonth(), 1));
+  d.setDate(d.getDate() - (p === "30d" ? 29 : p === "90d" ? 89 : 364));
+  return localISODate(d);
 }
-
-/** Data ISO do fim do período. Pra "Este mês" = último dia do mês corrente.
- *  Pros rolling (30d/90d/1y) = null, sem teto (até hoje). */
-function periodEndDate(p: Period): string | null {
-  if (p === "month") {
-    const d = new Date();
-    // Último dia do mês: vai pro mês seguinte e volta 1 dia
-    d.setMonth(d.getMonth() + 1);
-    d.setDate(0);
-    d.setHours(23, 59, 59, 999);
-    return d.toISOString().slice(0, 10);
+function daysBetween(fromISO: string, toISO: string): string[] {
+  const out: string[] = [];
+  const [fy, fm, fd] = fromISO.split("-").map(Number);
+  const cur = new Date(fy, fm - 1, fd);
+  const end = toISO;
+  while (localISODate(cur) <= end) {
+    out.push(localISODate(cur));
+    cur.setDate(cur.getDate() + 1);
   }
-  return null;
+  return out;
 }
 
-/** Quantidade de dias do período — usado nos gráficos pra dimensionar o eixo X. */
-function periodDays(p: Period): number {
-  if (p === "month") {
-    // Dia atual do mês = dias decorridos no mês corrente
-    return new Date().getDate();
-  }
-  return p === "30d" ? 30 : p === "90d" ? 90 : 365;
-}
-
-/** Rótulo curto pro hint ("mês", "30d", "90d", "1a"). */
-function periodHintLabel(p: Period): string {
-  return p === "month" ? "mês" : p === "1y" ? "1a" : p;
-}
-
-type SaleRow = Sale & {
-  customers?: { name: string } | null;
-  /** preenchido pelo trigger de comissão; pode faltar em vendas antigas */
-  commission_amount?: number | null;
+const SALE_STATUS: Record<string, { label: string; tone: Tone }> = {
+  orcamento: { label: "Orçamento", tone: "muted" },
+  aprovado: { label: "Aprovada", tone: "info" },
+  faturado: { label: "Faturada", tone: "good" },
+  entregue: { label: "Entregue", tone: "good" },
+  cancelado: { label: "Cancelada", tone: "muted" },
+  perdido: { label: "Perdida", tone: "muted" },
 };
-type OsRow = ServiceOrder & {
-  customers?: { name: string } | null;
-};
-
-function startOfMonth(): string {
-  const d = new Date(); d.setDate(1); d.setHours(0, 0, 0, 0);
-  return d.toISOString().slice(0, 10);
-}
-
-/** Data local de hoje no formato YYYY-MM-DD (sem distorção de fuso). */
-function todayISO(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function isoDaysAgo(days: number): string {
-  const d = new Date(); d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
-}
+const isInvoiced = (s: SaleRow) => s.status === "faturado" || s.status === "entregue";
 
 export default function Dashboard() {
   const { user } = useAuth();
   const perms = usePermissions();
+  const { vertical } = useVertical();
   const companyId = user?.company_id;
+  const usesOs = vertical === "assistencia_tecnica";
 
   const [period, setPeriod] = useState<Period>("month");
-
   const [sales, setSales] = useState<SaleRow[]>([]);
-  const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
+  const [saleItems, setSaleItems] = useState<SaleItemRow[]>([]);
   const [serviceOrders, setServiceOrders] = useState<OsRow[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<ProductRow[]>([]);
   const [profiles, setProfiles] = useState<Array<{ id: string; nome: string }>>([]);
-  const [customerCount, setCustomerCount] = useState(0);
   const [cashSession, setCashSession] = useState<CashSession | null>(null);
+  const [receivedDaily, setReceivedDaily] = useState<Record<string, number> | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Recebido / a receber (só quem tem acesso ao financeiro)
-  const canSeeReceivables = !!user?.roles?.some((r) => ["admin", "gerente", "financeiro", "super_admin"].includes(r));
+  const canSeeReceivables = !!perms.hasFinancialAccess;
   const receivables = useReceivablesOverview(canSeeReceivables);
+
+  const start = periodStart(period);
+  const today = localISODate();
 
   async function load() {
     if (!companyId) return;
     setLoading(true);
 
-    const periodStart = periodStartDate(period);
-    const periodEnd   = periodEndDate(period);
-
-    // Vendas no período (já filtradas por RLS conforme role)
-    let salesP = supabase
+    // Vendas no período (RLS já filtra conforme o papel)
+    const salesP = supabase
       .from("sales" as any)
       .select("*, customers ( name )")
       .eq("company_id", companyId)
-      .gte("issue_date", periodStart)
+      .gte("issue_date", start)
+      .lte("issue_date", today)
       .order("issue_date", { ascending: false })
-      .limit(1000);
-    if (periodEnd) salesP = salesP.lte("issue_date", periodEnd);
+      .limit(2000);
 
-    // OS (todas — pra ver fila e status; RLS já filtra pra técnico/vendedor)
+    // OS (todas as abertas e recentes; RLS filtra técnico/vendedor)
     const osP = supabase
       .from("service_orders" as any)
       .select("*, customers ( name )")
@@ -166,565 +130,355 @@ export default function Dashboard() {
       .order("created_at", { ascending: false })
       .limit(500);
 
-    // Itens de venda no período pra calcular top produtos (do mesmo conjunto autorizado)
-    let itemsP = supabase
+    // Itens vendidos no período (mais vendidos)
+    const itemsP = supabase
       .from("sale_items" as any)
-      .select("product_id, description, qty, unit_price, total, sale_id, sales!inner(company_id, issue_date, status)")
+      .select("product_id, description, qty, total, sales!inner(company_id, issue_date, status)")
       .eq("sales.company_id", companyId)
-      .gte("sales.issue_date", periodStart)
+      .gte("sales.issue_date", start)
+      .lte("sales.issue_date", today)
       .in("sales.status", ["faturado", "entregue"]);
-    if (periodEnd) itemsP = itemsP.lte("sales.issue_date", periodEnd);
 
-    // Produtos (todo mundo lê pra mostrar estoque crítico)
     const productsP = supabase
       .from("products" as any)
       .select("*")
       .eq("company_id", companyId)
       .is("hidden_at", null);
 
-    // Profiles (pra mostrar nome no ranking de vendedores)
-    const profilesP = supabase
-      .from("profiles" as any)
-      .select("id, nome")
-      .eq("company_id", companyId);
+    const profilesP = supabase.from("profiles" as any).select("id, nome").eq("company_id", companyId);
 
-    // Contagem de clientes (head:true pega só count)
-    const customersP = supabase
-      .from("customers" as any)
-      .select("id", { count: "exact", head: true })
-      .eq("company_id", companyId)
-      .eq("active", true);
+    const cashP: Promise<CashSession | null> = user?.id ? getOpenSession(user.id) : Promise.resolve(null);
+    const recP = canSeeReceivables ? fetchReceivedDaily(start, today) : Promise.resolve(null);
 
-    // Caixa aberto do vendedor logado (pra mostrar status no dashboard)
-    const cashP: Promise<CashSession | null> = user?.id
-      ? getOpenSession(user.id)
-      : Promise.resolve(null);
+    const [sr, or, ir, pr, prof, cash, rec] = await Promise.all([salesP, osP, itemsP, productsP, profilesP, cashP, recP]);
 
-    const [sr, or, ir, pr, prof, cr, cash] = await Promise.all([
-      salesP, osP, itemsP, productsP, profilesP, customersP, cashP,
-    ]);
-
-    setSales((sr.data as any[]) ?? []);
+    setSales(((sr.data as any[]) ?? []).map((s) => ({ ...s, total: Number(s.total || 0) })));
     setServiceOrders((or.data as any[]) ?? []);
     setSaleItems((ir.data as any[]) ?? []);
     setProducts((pr.data as any[]) ?? []);
     setProfiles((prof.data as any[]) ?? []);
-    setCustomerCount(cr.count || 0);
     setCashSession(cash);
-
+    setReceivedDaily(rec ? Object.fromEntries(rec.map((r) => [r.day, r.total])) : null);
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, [companyId, period]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [companyId, period, canSeeReceivables]);
 
-  // ---------- KPIs ----------
-  const kpis = useMemo(() => {
-    const monthStart = startOfMonth();
-    const invoiced = sales.filter((s) => s.status === "faturado" || s.status === "entregue");
-    const monthRevenue = invoiced
-      .filter((s) => s.issue_date >= monthStart)
-      .reduce((sum, s) => sum + s.total, 0);
-    const periodRevenue = invoiced.reduce((sum, s) => sum + s.total, 0);
-    const avgTicket = invoiced.length ? periodRevenue / invoiced.length : 0;
+  /* ---------- derivados ---------- */
+  const days = useMemo(() => daysBetween(start, today), [start, today]);
+  const soldByDay = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const s of sales) if (isInvoiced(s)) m[s.issue_date.slice(0, 10)] = (m[s.issue_date.slice(0, 10)] || 0) + s.total;
+    return m;
+  }, [sales]);
 
-    const openSales = sales.filter((s) => s.status === "orcamento" || s.status === "aprovado").length;
+  const profileName = useMemo(() => new Map(profiles.map((p) => [p.id, p.nome])), [profiles]);
 
-    const openOs = serviceOrders.filter((o) =>
-      !["entregue", "faturada", "cancelada"].includes(o.status)
-    ).length;
-    const waitingPart = serviceOrders.filter((o) => o.status === "aguardando_peca").length;
-    const overdueOs = serviceOrders.filter((o) =>
-      o.due_at && new Date(o.due_at) < new Date()
-      && !["concluida", "entregue", "faturada", "cancelada"].includes(o.status)
-    ).length;
-    // OS contam como "concluídas no mês" se foram entregues OU faturadas no período.
-    // Usa delivered_at, mas cai pra finished_at / updated_at se não estiver preenchido
-    // (cobre OS antigas e o caso de pular direto pra 'faturada').
-    const finishedMonthOs = serviceOrders.filter((o) => {
-      if (o.status !== "entregue" && o.status !== "faturada") return false;
-      const ref = o.delivered_at || o.finished_at || o.updated_at;
-      return !!ref && ref >= monthStart;
-    }).length;
-
-    const lowStockCount = products.filter((p) =>
-      p.active && p.stock_min != null && p.stock_qty < p.stock_min
-    ).length;
-    const stockValue = products.reduce(
-      (s, p) => s + (Number(p.cost_price) || 0) * (Number(p.stock_qty) || 0), 0
-    );
-
-    return { monthRevenue, periodRevenue, avgTicket, openSales, openOs, waitingPart, overdueOs, finishedMonthOs, lowStockCount, stockValue };
-  }, [sales, serviceOrders, products]);
-
-  // ---------- Top produtos ----------
-  const topProducts = useMemo(() => {
-    const map = new Map<string, { product_id: string | null; name: string; qty: number; revenue: number }>();
+  const topItems = useMemo(() => {
+    const map = new Map<string, { key: string; name: string; qty: number; value: number }>();
     for (const it of saleItems) {
-      if (!it.product_id) continue;
-      const k = it.product_id;
-      const cur = map.get(k) || { product_id: it.product_id, name: it.description, qty: 0, revenue: 0 };
+      const k = it.product_id || `srv:${it.description}`;
+      const cur = map.get(k) || { key: k, name: it.description, qty: 0, value: 0 };
       cur.qty += Number(it.qty) || 0;
-      cur.revenue += Number(it.total) || 0;
+      cur.value += Number(it.total) || 0;
       map.set(k, cur);
     }
-    return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
+    return [...map.values()].sort((a, b) => b.value - a.value).slice(0, 5);
   }, [saleItems]);
 
-  // ---------- Top vendedores ----------
   const topSellers = useMemo(() => {
-    const profileById = new Map(profiles.map((p) => [p.id, p.nome]));
-    const map = new Map<string, { seller_id: string | null; name: string; revenue: number; count: number }>();
+    const map = new Map<string, { key: string; name: string; count: number; value: number }>();
     for (const s of sales) {
-      if (!(s.status === "faturado" || s.status === "entregue")) continue;
+      if (!isInvoiced(s)) continue;
       const k = s.seller_id || "—";
-      const cur = map.get(k) || {
-        seller_id: s.seller_id,
-        name: profileById.get(s.seller_id || "") || "Sem responsável",
-        revenue: 0,
-        count: 0,
-      };
-      cur.revenue += s.total;
+      const cur = map.get(k) || { key: k, name: profileName.get(s.seller_id || "") || "Sem responsável", count: 0, value: 0 };
       cur.count += 1;
+      cur.value += s.total;
       map.set(k, cur);
     }
-    return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
-  }, [sales, profiles]);
+    return [...map.values()].sort((a, b) => b.value - a.value).slice(0, 5);
+  }, [sales, profileName]);
 
-  // ============================================================
-  // RENDER por papel
-  // ============================================================
+  const lateOs = useMemo(() => serviceOrders.filter(isOsLate), [serviceOrders]);
+  const lowStock = useMemo(() => lowStockOf(products), [products]);
 
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="h-8 w-48 bg-muted/40 rounded animate-pulse" />
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[...Array(8)].map((_, i) => (
-            <div key={i} className="h-24 rounded-lg border bg-card animate-pulse" />
+  const attention = useMemo<AttentionItem[]>(() => {
+    const items: AttentionItem[] = [];
+    if (receivables && receivables.overdue_count > 0) {
+      items.push({
+        key: "rec-overdue", tone: "crit", label: "Vencido",
+        title: `${receivables.overdue_count} pagamento${receivables.overdue_count > 1 ? "s" : ""} vencido${receivables.overdue_count > 1 ? "s" : ""} · ${formatBRL(receivables.overdue_total)}`,
+        detail: "boleto, crediário, transferência ou cartão aguardando baixa",
+        to: "/financeiro/receber", action: "Cobrar",
+      });
+    }
+    if (receivables && receivables.due_today_count > 0) {
+      items.push({
+        key: "rec-today", tone: "warn", label: "Vence hoje",
+        title: `${receivables.due_today_count} pagamento${receivables.due_today_count > 1 ? "s" : ""} · ${formatBRL(receivables.due_today_total)}`,
+        detail: "confira se caiu e dê baixa",
+        to: "/financeiro/receber", action: "Ver",
+      });
+    }
+    if (usesOs && lateOs.length > 0) {
+      items.push({
+        key: "os-late", tone: "serious", label: "Atrasada",
+        title: `${lateOs.length} OS passou${lateOs.length > 1 ? "ram" : ""} do prazo`,
+        detail: lateOs.slice(0, 3).map((o) => `#${o.number} ${o.customers?.name || ""}`.trim()).join(" · "),
+        to: "/service-orders", action: "Abrir",
+      });
+    }
+    if (lowStock.length > 0 && (perms.isManager || perms.isTecnico)) {
+      items.push({
+        key: "stock", tone: "warn", label: "Repor",
+        title: `${lowStock.length} ite${lowStock.length > 1 ? "ns" : "m"} abaixo do mínimo`,
+        detail: lowStock.slice(0, 3).map((p) => `${p.name} (${Math.max(0, Number(p.stock_qty))} de ${p.stock_min})`).join(" · "),
+        to: "/products", action: "Ver lista",
+      });
+    }
+    if (cashSession && cashSession.opened_at.slice(0, 10) < today) {
+      items.push({
+        key: "cash-old", tone: "info", label: "Caixa",
+        title: "Seu caixa está aberto desde " + new Date(cashSession.opened_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
+        detail: "feche o caixa do dia anterior antes de vender hoje",
+        to: "/pdv", action: "Fechar",
+      });
+    }
+    return items;
+  }, [receivables, usesOs, lateOs, lowStock, cashSession, today, perms.isManager, perms.isTecnico]);
+
+  /* ---------- cabeçalho ---------- */
+  const hour = new Date().getHours();
+  const greet = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+  const dateLabel = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" });
+
+  const Header = (
+    <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
+      <div className="min-w-0">
+        <h1 className="text-[22px] font-semibold tracking-tight">
+          {greet}, {user?.nome?.split(" ")[0] || "bem-vindo"}
+        </h1>
+        <p className="text-sm text-muted-foreground first-letter:uppercase">{dateLabel}</p>
+      </div>
+      <div className="ml-auto flex flex-wrap items-center gap-2">
+        <div role="group" aria-label="Período" className="inline-flex rounded-lg border bg-card p-[3px]">
+          {PERIODS.map((p) => (
+            <button
+              key={p.key}
+              type="button"
+              aria-pressed={period === p.key}
+              onClick={() => setPeriod(p.key)}
+              className={`rounded-md px-3 py-1 text-[12.5px] font-medium transition-colors ${
+                period === p.key ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {p.label}
+            </button>
           ))}
         </div>
-        <div className="h-64 rounded-lg border bg-card animate-pulse" />
-      </div>
-    );
-  }
-
-  // -------- Header comum --------
-  const Header = (
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <h1 className="text-3xl font-bold">
-          Olá, {user?.nome?.split(" ")[0] || "bem-vindo"} 👋
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {perms.isManager
-            ? "Visão geral da operação."
-            : perms.isTecnico
-            ? "Suas ordens de serviço."
-            : "Suas vendas e atendimentos."}
-        </p>
-      </div>
-      <div className="flex items-center gap-2">
-        <Tabs value={period} onValueChange={(v: any) => setPeriod(v)}>
-          <TabsList>
-            <TabsTrigger value="month">Este mês</TabsTrigger>
-            <TabsTrigger value="30d">30 dias</TabsTrigger>
-            <TabsTrigger value="90d">90 dias</TabsTrigger>
-            <TabsTrigger value="1y">1 ano</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        <Button variant="outline" size="icon" onClick={load} title="Recarregar">
+        <Button variant="outline" size="icon" onClick={load} title="Recarregar" aria-label="Recarregar">
           <RefreshCw className="h-4 w-4" />
         </Button>
+        {(perms.isManager || perms.isVendedor) && (
+          <Button asChild variant="outline"><Link to="/pdv">Venda rápida</Link></Button>
+        )}
+        {usesOs && (
+          <Button asChild><Link to="/service-orders/new">Nova OS</Link></Button>
+        )}
       </div>
     </div>
   );
 
-  // -------- TÉCNICO --------
-  if (perms.isTecnico && !perms.isManager && !perms.isVendedor) {
-    const myOs = serviceOrders;
-    const inProgress = myOs.filter((o) => o.status === "em_execucao").length;
-    const waitingApproval = myOs.filter((o) => o.status === "aguardando_aprovacao" || o.status === "aguardando_peca").length;
+  if (loading) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         {Header}
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard
-            label="OS atribuídas"
-            value={myOs.filter((o) => !["entregue", "faturada", "cancelada"].includes(o.status)).length}
-            icon={<Wrench className="h-4 w-4" />}
-            tone="violet"
-            to="/service-orders"
-          />
-          <StatCard
-            label="Em execução agora"
-            value={inProgress}
-            icon={<Clock className="h-4 w-4" />}
-            tone="sky"
-          />
-          <StatCard
-            label="Aguardando peça/aprovação"
-            value={waitingApproval}
-            icon={<PackageOpen className="h-4 w-4" />}
-            tone="amber"
-            alert={waitingApproval > 0}
-          />
-          <StatCard
-            label="Concluídas no mês"
-            value={kpis.finishedMonthOs}
-            icon={<CheckCircle2 className="h-4 w-4" />}
-            tone="emerald"
-          />
+        <div className="h-24 animate-pulse rounded-[10px] border bg-card" />
+        <div className="grid gap-4 xl:grid-cols-3">
+          <div className="h-80 animate-pulse rounded-[10px] border bg-card xl:col-span-2" />
+          <div className="h-80 animate-pulse rounded-[10px] border bg-card" />
         </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <CriticalOsList serviceOrders={myOs} title="Suas OS que precisam de atenção" />
-          <OsStatusDonut serviceOrders={myOs} />
-        </div>
-
-        <Button asChild>
-          <Link to="/service-orders"><Plus className="h-4 w-4 mr-1" /> Abrir nova OS</Link>
-        </Button>
       </div>
     );
   }
 
-  // -------- VENDEDOR (sem visão de gerência) --------
+  /* ================= TÉCNICO ================= */
+  if (perms.isTecnico && !perms.isManager && !perms.isVendedor) {
+    const open = serviceOrders.filter((o) => !["entregue", "faturada", "cancelada"].includes(o.status));
+    const inProgress = open.filter((o) => o.status === "em_execucao").length;
+    const waiting = open.filter((o) => o.status === "aguardando_aprovacao" || o.status === "aguardando_peca").length;
+    const monthStart = localISODate(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+    const finishedMonth = serviceOrders.filter((o) => {
+      if (o.status !== "entregue" && o.status !== "faturada") return false;
+      const ref = o.delivered_at || o.finished_at || o.updated_at;
+      return !!ref && ref.slice(0, 10) >= monthStart;
+    }).length;
+    return (
+      <div className="space-y-4">
+        {Header}
+        <AttentionPanel items={attention} />
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <StatCard label="Suas OS abertas" value={open.length} icon={<Wrench />} to="/service-orders" />
+          <StatCard label="Em execução agora" value={inProgress} icon={<Clock />} />
+          <StatCard label="Aguardando peça ou aprovação" value={waiting} icon={<PackageOpen />} tone="amber" alert={waiting > 0} />
+          <StatCard label="Concluídas no mês" value={finishedMonth} icon={<CheckCircle2 />} />
+        </div>
+        <div className="grid gap-4 xl:grid-cols-3">
+          <OsStagesPanel serviceOrders={serviceOrders} />
+          <div className="xl:col-span-2"><RecentOsPanel serviceOrders={serviceOrders} techNames={profileName} /></div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ================= VENDEDOR ================= */
   if (perms.isVendedor && !perms.isManager) {
-    const mySales = sales; // RLS já filtra
-    const today = todayISO();
-    const monthStart = startOfMonth();
-    const isInvoiced = (s: SaleRow) => s.status === "faturado" || s.status === "entregue";
-
-    // --- hoje ---
-    const todaySales = mySales.filter(
-      (s) => isInvoiced(s) && (s.issue_date || "").slice(0, 10) === today
-    );
-    const todayRevenue = todaySales.reduce((sum, s) => sum + Number(s.total || 0), 0);
-    const todayCommission = todaySales.reduce((sum, s) => sum + Number(s.commission_amount || 0), 0);
-
-    // --- mês ---
-    const myInvoicedMonth = mySales.filter((s) => isInvoiced(s) && s.issue_date >= monthStart);
-    const myMonthRevenue = myInvoicedMonth.reduce((sum, s) => sum + Number(s.total || 0), 0);
-    const myMonthCommission = myInvoicedMonth.reduce(
-      (sum, s) => sum + Number(s.commission_amount || 0), 0
-    );
-
-    const myOpenSales = mySales.filter((s) => s.status === "orcamento" || s.status === "aprovado");
-    const myOpenOs = serviceOrders.filter(
-      (o) => !["entregue", "faturada", "cancelada"].includes(o.status)
-    ).length;
-
-    // --- últimas vendas ---
-    const recentSales = [...mySales]
-      .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))
-      .slice(0, 7);
-
+    const todaySales = sales.filter((s) => isInvoiced(s) && s.issue_date.slice(0, 10) === today);
+    const todayValue = todaySales.reduce((n, s) => n + s.total, 0);
+    const todayCommission = todaySales.reduce((n, s) => n + Number(s.commission_amount || 0), 0);
+    const monthStart = localISODate(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+    const monthSales = sales.filter((s) => isInvoiced(s) && s.issue_date >= monthStart);
+    const monthValue = monthSales.reduce((n, s) => n + s.total, 0);
+    const monthCommission = monthSales.reduce((n, s) => n + Number(s.commission_amount || 0), 0);
+    const openSales = sales.filter((s) => s.status === "orcamento" || s.status === "aprovado");
+    const recent = [...sales].sort((a, b) => (b.created_at || "").localeCompare(a.created_at || "")).slice(0, 7);
     const cashOpen = !!cashSession;
-    const cashOpenedTime = cashSession
-      ? new Date(cashSession.opened_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
-      : null;
 
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         {Header}
-
-        {/* aviso: caixa fechado */}
         {!cashOpen && (
           <Link
             to="/pdv"
-            className="flex items-center gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm transition hover:bg-amber-500/15"
+            className="flex items-center gap-3 rounded-[10px] border border-warning/50 bg-warning/10 px-4 py-3 text-sm transition-colors hover:bg-warning/15"
           >
-            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
-            <span className="text-amber-200">
-              Seu caixa está fechado — abra o caixa pra começar a vender.
-            </span>
-            <span className="ml-auto shrink-0 font-medium text-amber-300">Abrir caixa →</span>
+            <StatusPill tone="warn" icon={<Wallet />}>Caixa fechado</StatusPill>
+            <span className="text-foreground">Abra o caixa pra começar a vender.</span>
+            <span className="ml-auto shrink-0 font-medium text-primary">Abrir caixa</span>
           </Link>
         )}
-
-        {/* HOJE */}
-        <div>
-          <h2 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
-            <CalendarDays className="h-3.5 w-3.5" /> Hoje
-          </h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <StatCard
-              label="Vendas hoje"
-              value={todaySales.length}
-              hint={todaySales.length === 1 ? "venda fechada" : "vendas fechadas"}
-              icon={<ShoppingCart className="h-4 w-4" />}
-              tone="violet"
-              to="/pdv"
-            />
-            <StatCard
-              label="Vendido hoje"
-              value={formatBRL(todayRevenue)}
-              icon={<DollarSign className="h-4 w-4" />}
-              tone="emerald"
-              to="/pdv"
-            />
-            <StatCard
-              label="Comissão hoje"
-              value={formatBRL(todayCommission)}
-              icon={<Percent className="h-4 w-4" />}
-              tone="teal"
-            />
-            <StatCard
-              label="Caixa"
-              value={cashOpen ? "Aberto" : "Fechado"}
-              hint={cashOpen ? `aberto desde ${cashOpenedTime}` : "toque pra abrir"}
-              icon={<Wallet className="h-4 w-4" />}
-              tone={cashOpen ? "emerald" : "amber"}
-              to="/pdv"
-              alert={!cashOpen}
-            />
+        <AttentionPanel items={attention.filter((a) => a.key !== "stock")} />
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <StatCard label="Vendido hoje" value={formatBRL(todayValue)} hint={`${todaySales.length} venda${todaySales.length === 1 ? "" : "s"}`} icon={<DollarSign />} to="/sales" />
+          <StatCard label="Comissão hoje" value={formatBRL(todayCommission)} icon={<Percent />} />
+          <StatCard label="Vendido no mês" value={formatBRL(monthValue)} hint={`comissão ${formatBRL(monthCommission)}`} icon={<ShoppingCart />} to="/sales" />
+          <StatCard label="Em aberto" value={openSales.length} hint="orçamentos e pedidos" icon={<FileText />} to="/orcamentos" />
+        </div>
+        <div className="grid gap-4 xl:grid-cols-3">
+          <div className="xl:col-span-2">
+            <SoldReceivedChart days={days} sold={soldByDay} received={null} title="Suas vendas" sub="acumulado no período" />
           </div>
+          <RecentSalesPanel sales={recent} />
         </div>
-
-        {/* NO MÊS */}
-        <div>
-          <h2 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
-            <TrendingUp className="h-3.5 w-3.5" /> No mês
-          </h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <StatCard
-              label="Vendido no mês"
-              value={formatBRL(myMonthRevenue)}
-              hint={`${myInvoicedMonth.length} ${myInvoicedMonth.length === 1 ? "venda" : "vendas"} fechadas`}
-              icon={<DollarSign className="h-4 w-4" />}
-              tone="emerald"
-              to="/sales"
-            />
-            <StatCard
-              label="Comissão do mês"
-              value={formatBRL(myMonthCommission)}
-              icon={<Percent className="h-4 w-4" />}
-              tone="teal"
-            />
-            <StatCard
-              label="Em aberto"
-              value={myOpenSales.length}
-              hint="orçamentos + pedidos"
-              icon={<FileText className="h-4 w-4" />}
-              tone="sky"
-              to="/sales"
-            />
-            <StatCard
-              label="Suas OS abertas"
-              value={myOpenOs}
-              icon={<Wrench className="h-4 w-4" />}
-              tone="violet"
-              to="/service-orders"
-            />
-          </div>
-        </div>
-
-        {/* atalhos rápidos */}
-        <div className="flex flex-wrap gap-2">
-          <Button asChild className="bg-blue-600 hover:bg-blue-700">
-            <Link to="/pdv"><Zap className="h-4 w-4 mr-1" /> Venda rápida (PDV)</Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link to="/sales/new"><ShoppingCart className="h-4 w-4 mr-1" /> Venda completa</Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link to="/service-orders/new"><Wrench className="h-4 w-4 mr-1" /> Nova OS</Link>
-          </Button>
-        </div>
-
-        {/* gráfico + últimas vendas */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2">
-            <RevenueChart
-              sales={mySales.filter((s) => s.status === "faturado" || s.status === "entregue")}
-              days={periodDays(period)}
-            />
-          </div>
-          <RecentSalesList sales={recentSales} />
-        </div>
-
-        {/* produtos + OS */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <TopProducts items={topProducts} />
-          <CriticalOsList serviceOrders={serviceOrders} limit={6} title="Suas OS críticas" />
+        <div className="grid gap-4 lg:grid-cols-2">
+          <RankPanel
+            title="Mais vendidos"
+            sub="no período"
+            empty="Nenhuma venda faturada no período."
+            items={topItems.map((t) => ({ key: t.key, name: t.name, meta: `${t.qty.toLocaleString("pt-BR")} un`, value: t.value }))}
+          />
+          {usesOs ? <RecentOsPanel serviceOrders={serviceOrders} techNames={profileName} /> : <CashTodayPanel userId={user?.id} />}
         </div>
       </div>
     );
   }
 
-  // -------- ADMIN / GERENTE --------
+  /* ================= GESTOR ================= */
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {Header}
-
-      {/* Contas a pagar: atrasadas / hoje / próximos 7 dias (admin + financeiro, add-on ativo) */}
+      <AttentionPanel items={attention} />
       <UpcomingBillsStrip />
 
-      {/* KPIs principais */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard
-          label="Vendido no mês"
-          value={formatBRL(kpis.monthRevenue)}
-          hint={`Período (${periodHintLabel(period)}): ${formatBRL(kpis.periodRevenue)} · ticket ${formatBRL(kpis.avgTicket)}`}
-          icon={<DollarSign className="h-4 w-4" />}
-          tone="sky"
-          to="/sales"
-        />
-        <StatCard
-          label="Recebido no mês"
-          value={receivables ? formatBRL(receivables.received_month) : "—"}
-          hint={receivables
-            ? receivables.overdue_count > 0
-              ? `A receber ${formatBRL(receivables.open_total)} · ${formatBRL(receivables.overdue_total)} vencido`
-              : `A receber ${formatBRL(receivables.open_total)} · nada vencido`
-            : "boleto, cartão e crediário entram após a baixa"}
-          icon={<HandCoins className="h-4 w-4" />}
-          tone={receivables && receivables.overdue_count > 0 ? "rose" : "emerald"}
-          to="/financeiro/receber"
-          alert={!!receivables && receivables.overdue_count > 0}
-        />
-        <StatCard
-          label="OS em andamento"
-          value={kpis.openOs}
-          hint={kpis.overdueOs > 0 ? `${kpis.overdueOs} em atraso` : "todas no prazo"}
-          icon={<Wrench className="h-4 w-4" />}
-          tone={kpis.overdueOs > 0 ? "rose" : "violet"}
-          to="/service-orders"
-          alert={kpis.overdueOs > 0}
-        />
-        <StatCard
-          label="Aguardando peça"
-          value={kpis.waitingPart}
-          icon={<PackageOpen className="h-4 w-4" />}
-          tone="amber"
-          to="/service-orders"
-        />
-        <StatCard
-          label="Vendas em aberto"
-          value={kpis.openSales}
-          hint="orçamentos + pedidos"
-          icon={<FileText className="h-4 w-4" />}
-          tone="sky"
-          to="/sales"
-        />
-
-        <StatCard
-          label="Estoque crítico"
-          value={kpis.lowStockCount}
-          hint={`Valor em estoque: ${formatBRL(kpis.stockValue)}`}
-          icon={<AlertTriangle className="h-4 w-4" />}
-          tone={kpis.lowStockCount > 0 ? "amber" : "default"}
-          to="/products"
-          alert={kpis.lowStockCount >= 5}
-        />
-        <StatCard
-          label="Clientes ativos"
-          value={customerCount}
-          icon={<Users className="h-4 w-4" />}
-          tone="default"
-          to="/customers"
-        />
-        <StatCard
-          label="OS concluídas no mês"
-          value={kpis.finishedMonthOs}
-          icon={<CheckCircle2 className="h-4 w-4" />}
-          tone="emerald"
-        />
-      </div>
-
-      {/* Linha 1: Faturamento + OS Status */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2">
-          <RevenueChart
-            sales={sales.filter((s) => s.status === "faturado" || s.status === "entregue")}
-            days={periodDays(period)}
+      <div className="grid gap-4 xl:grid-cols-3">
+        <div className="min-w-0 xl:col-span-2">
+          <SoldReceivedChart
+            days={days}
+            sold={soldByDay}
+            received={canSeeReceivables ? receivedDaily || {} : null}
+            openTotal={receivables?.open_total}
+            overdueTotal={receivables?.overdue_total}
+            openCount={receivables?.open_count}
           />
         </div>
-        <OsStatusDonut serviceOrders={serviceOrders} />
+        <CashTodayPanel userId={user?.id} />
       </div>
 
-      {/* Linha 2: Top produtos + Top vendedores */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <TopProducts items={topProducts} />
-        <TopSellers items={topSellers} />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {usesOs ? (
+          <OsStagesPanel serviceOrders={serviceOrders} />
+        ) : (
+          <RankPanel
+            title="Vendedores"
+            sub="no período"
+            empty="Nenhuma venda faturada no período."
+            items={topSellers.map((s) => ({ key: s.key, name: s.name, meta: `${s.count} venda${s.count === 1 ? "" : "s"}`, value: s.value }))}
+          />
+        )}
+        {canSeeReceivables && <ReceivablesAgingPanel />}
+        <RankPanel
+          title="Mais vendidos"
+          sub="no período"
+          action={<PanelLink to="/reports">Relatório</PanelLink>}
+          empty="Nenhuma venda faturada no período."
+          items={topItems.map((t) => ({ key: t.key, name: t.name, meta: `${t.qty.toLocaleString("pt-BR")} un`, value: t.value }))}
+        />
       </div>
 
-      {/* Linha 3: Financeiro (só admin/financeiro) + OS críticas + Estoque crítico */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <FinanceiroDashboardCard />
-        <CriticalOsList serviceOrders={serviceOrders} />
-        <LowStockList products={products} />
-      </div>
-
-      {/* Atalhos */}
-      <div className="rounded-lg border bg-card p-4">
-        <h3 className="text-sm font-semibold mb-3">Atalhos</h3>
-        <div className="flex flex-wrap gap-2">
-          <Button asChild size="sm" variant="outline">
-            <Link to="/service-orders/new"><Wrench className="h-3 w-3 mr-1" /> Nova OS</Link>
-          </Button>
-          <Button asChild size="sm" variant="outline">
-            <Link to="/sales/new"><ShoppingCart className="h-3 w-3 mr-1" /> Nova venda</Link>
-          </Button>
-          <Button asChild size="sm" variant="outline">
-            <Link to="/customers"><Users className="h-3 w-3 mr-1" /> Novo cliente</Link>
-          </Button>
-          <Button asChild size="sm" variant="outline">
-            <Link to="/products"><Boxes className="h-3 w-3 mr-1" /> Estoque</Link>
-          </Button>
+      <div className="grid gap-4 xl:grid-cols-3">
+        <div className="min-w-0 xl:col-span-2">
+          {usesOs ? (
+            <RecentOsPanel serviceOrders={serviceOrders} techNames={profileName} />
+          ) : (
+            <RecentSalesPanel sales={[...sales].sort((a, b) => (b.created_at || "").localeCompare(a.created_at || "")).slice(0, 7)} />
+          )}
         </div>
+        <StockCriticalPanel products={products} />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {usesOs && (
+          <RankPanel
+            title="Vendedores"
+            sub="no período"
+            empty="Nenhuma venda faturada no período."
+            items={topSellers.map((s) => ({ key: s.key, name: s.name, meta: `${s.count} venda${s.count === 1 ? "" : "s"}`, value: s.value }))}
+          />
+        )}
+        <FinanceiroDashboardCard />
       </div>
     </div>
   );
 }
 
-/* ====================================================================
-   Lista das últimas vendas do vendedor
-==================================================================== */
-function RecentSalesList({ sales }: { sales: SaleRow[] }) {
+/* ---------- últimas vendas ---------- */
+function RecentSalesPanel({ sales }: { sales: SaleRow[] }) {
   return (
-    <div className="flex flex-col rounded-lg border bg-card">
-      <div className="flex items-center gap-2 border-b px-4 py-3">
-        <ShoppingCart className="h-4 w-4 text-blue-400" />
-        <span className="text-sm font-semibold">Suas últimas vendas</span>
-      </div>
+    <Panel title="Últimas vendas" action={<PanelLink to="/sales">Ver todas</PanelLink>} bodyClassName="pt-2">
       {sales.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center px-4 py-10 text-center text-sm text-muted-foreground">
-          Nenhuma venda registrada ainda.
-        </div>
+        <p className="px-4 py-8 text-center text-sm text-muted-foreground">Nenhuma venda registrada ainda.</p>
       ) : (
         <div className="divide-y">
           {sales.map((s) => {
-            const st = SALE_STATUS_LABELS[s.status as SaleStatus];
+            const st = SALE_STATUS[s.status] || { label: s.status, tone: "muted" as Tone };
             return (
-              <Link
-                key={s.id}
-                to={`/sales/${s.id}`}
-                className="flex items-center justify-between gap-3 px-4 py-2.5 transition hover:bg-muted/30"
-              >
+              <Link key={s.id} to={`/sales/${s.id}`} className="flex items-center justify-between gap-3 px-4 py-2.5 transition-colors hover:bg-accent/40">
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-medium">
-                    {s.customers?.name || "Consumidor final"}
-                  </div>
-                  <div className="text-[11px] text-muted-foreground">
-                    #{String(s.number).padStart(4, "0")} ·{" "}
-                    {formatDateBR(s.issue_date)}
+                  <div className="truncate text-sm font-medium">{s.customers?.name || "Consumidor final"}</div>
+                  <div className="text-xs text-muted-foreground">
+                    <span className="font-mono">#{String(s.number).padStart(6, "0")}</span> · {formatDateBR(s.issue_date)}
                   </div>
                 </div>
-                <div className="shrink-0 text-right">
-                  <div className="font-mono text-sm font-semibold">{formatBRL(s.total)}</div>
-                  {st && (
-                    <span className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-[10px] ring-1 ${st.tone}`}>
-                      {st.label}
-                    </span>
-                  )}
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <span className="num text-sm font-semibold">{formatBRL(s.total)}</span>
+                  <StatusPill tone={st.tone}>{st.label}</StatusPill>
                 </div>
               </Link>
             );
           })}
         </div>
       )}
-    </div>
+    </Panel>
   );
 }

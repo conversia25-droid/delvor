@@ -118,7 +118,7 @@ export default function MyAddonsPanel() {
     <>
       <div className="rounded-lg border bg-card">
         <div className="px-5 py-3 border-b flex items-center gap-2">
-          <Puzzle className="h-4 w-4 text-blue-400" />
+          <Puzzle className="h-4 w-4 text-blue-700 dark:text-blue-400" />
           <span className="font-semibold">Add-ons</span>
         </div>
 

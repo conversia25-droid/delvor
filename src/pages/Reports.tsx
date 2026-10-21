@@ -117,11 +117,11 @@ function ExportButtons({ onCSV, onPDF }: { onCSV: () => void; onPDF: () => void 
 }
 
 function Kpi({ icon: Icon, label, value, tone, hint }: { icon: any; label: string; value: string; tone?: string; hint?: string }) {
-  const toneClass: Record<string, string> = { emerald: "text-emerald-400", violet: "text-blue-400", amber: "text-amber-400" };
+  const toneClass: Record<string, string> = { emerald: "text-emerald-700 dark:text-emerald-400", violet: "text-blue-700 dark:text-blue-400", amber: "text-amber-700 dark:text-amber-400" };
   return (
     <div className="rounded-lg border bg-card p-4">
       <div className="text-xs text-muted-foreground flex items-center gap-1"><Icon className="h-3 w-3" /> {label}</div>
-      <div className={`text-2xl font-bold mt-1 ${tone ? toneClass[tone] : ""}`}>{value}</div>
+      <div className={`text-2xl font-semibold tracking-tight mt-1 ${tone ? toneClass[tone] : ""}`}>{value}</div>
       {hint && <div className="mt-0.5 text-[11px] text-muted-foreground">{hint}</div>}
     </div>
   );
@@ -138,7 +138,7 @@ export default function Reports() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-3xl font-bold flex items-center gap-2">
+        <h1 className="text-[22px] font-semibold tracking-tight flex items-center gap-2">
           <BarChart3 className="h-7 w-7" /> Relatórios
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -665,7 +665,7 @@ function SalesReport() {
           <button
             type="button"
             onClick={() => setSellerFilter("all")}
-            className="text-xs text-blue-400 hover:underline"
+            className="text-xs text-blue-700 dark:text-blue-400 hover:underline"
           >
             limpar filtro
           </button>
@@ -739,14 +739,14 @@ function SalesReport() {
                   <TableRow key={i}>
                     <TableCell className="font-medium">
                       <span className="inline-flex items-center gap-2">
-                        {i === 0 && s.revenue > 0 && <Trophy className="h-3.5 w-3.5 text-amber-400" />}
+                        {i === 0 && s.revenue > 0 && <Trophy className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />}
                         {s.name}
                       </span>
                     </TableCell>
                     <TableCell className="text-right">{s.count}</TableCell>
                     <TableCell className="text-right font-mono">{formatBRL(s.revenue)}</TableCell>
                     <TableCell className="text-right font-mono text-muted-foreground">{formatBRL(s.count ? s.revenue / s.count : 0)}</TableCell>
-                    <TableCell className="text-right font-mono font-semibold text-blue-300">{formatBRL(s.commission)}</TableCell>
+                    <TableCell className="text-right font-mono font-semibold text-blue-700 dark:text-blue-300">{formatBRL(s.commission)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -771,7 +771,7 @@ function SalesReport() {
                     <TableCell className="text-muted-foreground">{i + 1}</TableCell>
                     <TableCell className="font-medium">
                       <span className="inline-flex items-center gap-2">
-                        {i === 0 && c.revenue > 0 && <Trophy className="h-3.5 w-3.5 text-amber-400" />}
+                        {i === 0 && c.revenue > 0 && <Trophy className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />}
                         {c.name}
                       </span>
                     </TableCell>
@@ -856,12 +856,12 @@ function SalesReport() {
               <div className="px-4 py-2 border-b bg-muted/20 flex flex-wrap gap-4 text-xs">
                 <span>
                   <span className="text-muted-foreground">Total pendente: </span>
-                  <span className="font-mono font-semibold text-amber-400">
+                  <span className="font-mono font-semibold text-amber-700 dark:text-amber-400">
                     {formatBRL(pendingTotals.amount)}
                   </span>
                 </span>
                 {pendingTotals.overdue > 0 && (
-                  <span className="text-rose-400">
+                  <span className="text-rose-700 dark:text-rose-400">
                     {pendingTotals.overdue} vencida{pendingTotals.overdue > 1 ? "s" : ""}
                   </span>
                 )}
@@ -887,14 +887,14 @@ function SalesReport() {
                     <TableCell className="text-xs">{s.methods.join(" • ")}</TableCell>
                     <TableCell className="text-xs">
                       {s.nextDue ? (
-                        <span className={s.overdue ? "text-rose-400 font-medium" : "text-muted-foreground"}>
+                        <span className={s.overdue ? "text-rose-700 dark:text-rose-400 font-medium" : "text-muted-foreground"}>
                           {s.overdue ? "Vencido " : ""}{fmtDate(s.nextDue)}
                         </span>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
-                    <TableCell className={`text-right font-mono font-semibold ${s.overdue ? "text-rose-400" : "text-amber-400"}`}>
+                    <TableCell className={`text-right font-mono font-semibold ${s.overdue ? "text-rose-700 dark:text-rose-400" : "text-amber-700 dark:text-amber-400"}`}>
                       {formatBRL(s.pendingAmount)}
                     </TableCell>
                     <TableCell className="text-right font-mono text-muted-foreground">
@@ -917,7 +917,7 @@ function SalesReport() {
             {paymentsByMethod.rows.length > 0 && (
               <div className="px-4 py-2 border-b bg-muted/20 text-xs">
                 <span className="text-muted-foreground">Total recebido no período: </span>
-                <span className="font-mono font-semibold text-emerald-400">
+                <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-400">
                   {formatBRL(paymentsByMethod.total)}
                 </span>
               </div>
@@ -1199,8 +1199,8 @@ function CommissionsReport() {
                     <TableCell className="text-right text-muted-foreground">{s.rate}%</TableCell>
                     <TableCell className="text-right">{s.count}</TableCell>
                     <TableCell className="text-right font-mono">{formatBRL(s.total)}</TableCell>
-                    <TableCell className="text-right font-mono text-emerald-400">{formatBRL(s.paid)}</TableCell>
-                    <TableCell className="text-right font-mono font-semibold text-amber-300">{formatBRL(s.pending)}</TableCell>
+                    <TableCell className="text-right font-mono text-emerald-700 dark:text-emerald-400">{formatBRL(s.paid)}</TableCell>
+                    <TableCell className="text-right font-mono font-semibold text-amber-700 dark:text-amber-300">{formatBRL(s.pending)}</TableCell>
                     <TableCell className="text-right">
                       {s.pending > 0.005 ? (
                         perms.isManager && (
@@ -1209,7 +1209,7 @@ function CommissionsReport() {
                           </Button>
                         )
                       ) : (
-                        <span className="text-xs text-emerald-400 inline-flex items-center gap-1">
+                        <span className="text-xs text-emerald-700 dark:text-emerald-400 inline-flex items-center gap-1">
                           <CheckCircle2 className="h-3.5 w-3.5" /> quitado
                         </span>
                       )}
@@ -1257,7 +1257,7 @@ function CommissionsReport() {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Wallet className="h-5 w-5 text-blue-400" /> Pagar comissão
+              <Wallet className="h-5 w-5 text-blue-700 dark:text-blue-400" /> Pagar comissão
             </DialogTitle>
             <DialogDescription>
               Confirmar o pagamento da comissão pendente de{" "}
@@ -1271,7 +1271,7 @@ function CommissionsReport() {
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Valor a pagar</span>
-              <span className="font-mono font-bold text-amber-300">{formatBRL(payTarget?.pending || 0)}</span>
+              <span className="font-mono font-bold text-amber-700 dark:text-amber-300">{formatBRL(payTarget?.pending || 0)}</span>
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
@@ -1455,7 +1455,7 @@ function StockReport() {
                       <TableCell className="text-right font-mono">{formatBRL(Number(p.cost_price || 0))}</TableCell>
                       <TableCell className="text-right font-mono font-semibold">{formatBRL(qty * Number(p.cost_price || 0))}</TableCell>
                       <TableCell className="text-center">
-                        <Badge variant="outline" className={`text-[10px] ${critico ? "text-rose-400" : "text-emerald-400"}`}>
+                        <Badge variant="outline" className={`text-[10px] ${critico ? "text-rose-700 dark:text-rose-400" : "text-emerald-700 dark:text-emerald-400"}`}>
                           {critico ? "Crítico" : "OK"}
                         </Badge>
                       </TableCell>
@@ -1673,7 +1673,7 @@ function OsReport() {
           <button
             type="button"
             onClick={() => { setTechFilter("all"); setStatusFilter("all"); }}
-            className="text-xs text-blue-400 hover:underline"
+            className="text-xs text-blue-700 dark:text-blue-400 hover:underline"
           >
             limpar filtros
           </button>

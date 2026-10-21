@@ -200,6 +200,16 @@ export async function fetchReceivedSummary(
   };
 }
 
+/* ---------- Recebido por dia (gráfico Vendido × Recebido) ---------- */
+export async function fetchReceivedDaily(
+  from: string,
+  to: string,
+): Promise<{ day: string; total: number }[] | null> {
+  const { data, error } = await supabase.rpc("received_daily" as any, { p_from: from, p_to: to });
+  if (error) return null;
+  return ((data as any[]) || []).map((r) => ({ day: String(r.day).slice(0, 10), total: Number(r.total || 0) }));
+}
+
 /* ---------- Aviso entre telas (menu/Dashboard recarregam após baixa) ---------- */
 export const RECEIVABLES_CHANGED = "receivables-changed";
 export function notifyReceivablesChanged() {

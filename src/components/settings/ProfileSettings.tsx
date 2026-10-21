@@ -102,7 +102,7 @@ export default function ProfileSettings() {
       {/* Bloco 1: Dados pessoais */}
       <section>
         <div className="flex items-center gap-2 mb-1">
-          <UserIcon className="h-4 w-4 text-blue-400" />
+          <UserIcon className="h-4 w-4 text-blue-700 dark:text-blue-400" />
           <h2 className="text-lg font-semibold">Seus dados</h2>
         </div>
         <p className="text-sm text-muted-foreground mb-4">
@@ -157,7 +157,7 @@ export default function ProfileSettings() {
       {/* Bloco 2: Trocar senha */}
       <section>
         <div className="flex items-center gap-2 mb-1">
-          <KeyRound className="h-4 w-4 text-amber-400" />
+          <KeyRound className="h-4 w-4 text-amber-700 dark:text-amber-400" />
           <h2 className="text-lg font-semibold">Alterar senha</h2>
         </div>
         <p className="text-sm text-muted-foreground mb-4">

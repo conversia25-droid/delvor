@@ -33,8 +33,8 @@ export default function Settings() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <SettingsIcon className="h-7 w-7" /> Configurações
+        <h1 className="text-[22px] font-semibold tracking-tight flex items-center gap-2">
+          <SettingsIcon className="h-5 w-5 text-primary" /> Configurações
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
           Seu perfil, dados da empresa, WhatsApp e preferências.
@@ -90,7 +90,7 @@ export default function Settings() {
           {perms.isAdmin ? (
             <CompanySettings />
           ) : (
-            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-300 max-w-xl">
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-700 dark:text-amber-300 max-w-xl">
               <Lock className="h-4 w-4 inline mr-1" />
               Só administradores podem editar dados da empresa. Fale com o admin se precisar de alguma alteração.
             </div>
@@ -101,7 +101,7 @@ export default function Settings() {
           {perms.isAdmin ? (
             <BillingSettings />
           ) : (
-            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-300 max-w-xl">
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-700 dark:text-amber-300 max-w-xl">
               <Lock className="h-4 w-4 inline mr-1" />
               Só administradores podem ver a cobrança da empresa.
             </div>
@@ -112,7 +112,7 @@ export default function Settings() {
           {isAdminOrManager ? (
             <WhatsAppSettings />
           ) : (
-            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-300 max-w-xl">
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-700 dark:text-amber-300 max-w-xl">
               <Lock className="h-4 w-4 inline mr-1" />
               Só administradores e gerentes podem gerenciar a conexão do WhatsApp.
             </div>

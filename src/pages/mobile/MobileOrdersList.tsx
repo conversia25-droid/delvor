@@ -33,9 +33,9 @@ type OsRow = ServiceOrder & {
 
 const PRIORITY_TONE: Record<OsPriority, string> = {
   baixa:   "bg-zinc-500/15 text-zinc-300 ring-zinc-500/30",
-  normal:  "bg-sky-500/15 text-sky-300 ring-sky-500/30",
-  alta:    "bg-amber-500/15 text-amber-300 ring-amber-500/30",
-  urgente: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
+  normal:  "bg-sky-500/15 text-sky-700 dark:text-sky-300 ring-sky-500/30",
+  alta:    "bg-amber-500/15 text-amber-700 dark:text-amber-300 ring-amber-500/30",
+  urgente: "bg-rose-500/15 text-rose-700 dark:text-rose-300 ring-rose-500/30",
 };
 
 const ACTIVE_STATUSES: OsStatus[] = [
@@ -215,7 +215,7 @@ export default function MobileOrdersList() {
           <TabsTrigger value="hoje" className="text-xs">
             Hoje
             {hojeRows.length > 0 && (
-              <span className="ml-1.5 text-[10px] bg-rose-500/20 text-rose-300 rounded-full px-1.5 py-0.5">
+              <span className="ml-1.5 text-[10px] bg-rose-500/20 text-rose-700 dark:text-rose-300 rounded-full px-1.5 py-0.5">
                 {hojeRows.length}
               </span>
             )}
@@ -223,7 +223,7 @@ export default function MobileOrdersList() {
           <TabsTrigger value="abertas" className="text-xs">
             Em aberto
             {abertasRows.length > 0 && (
-              <span className="ml-1.5 text-[10px] bg-blue-500/20 text-blue-300 rounded-full px-1.5 py-0.5">
+              <span className="ml-1.5 text-[10px] bg-blue-500/20 text-blue-700 dark:text-blue-300 rounded-full px-1.5 py-0.5">
                 {abertasRows.length}
               </span>
             )}
@@ -329,7 +329,7 @@ function OsCard({ os, onClick }: { os: OsRow; onClick: () => void }) {
       {os.due_at && (
         <div
           className={`text-[11px] flex items-center gap-1.5 ${
-            overdue ? "text-rose-400 font-semibold" : "text-muted-foreground"
+            overdue ? "text-rose-700 dark:text-rose-400 font-semibold" : "text-muted-foreground"
           }`}
         >
           {overdue ? <AlertCircle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}

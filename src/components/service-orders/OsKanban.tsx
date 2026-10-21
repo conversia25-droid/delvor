@@ -41,9 +41,9 @@ const COLUMNS: OsStatus[] = [
 
 const PRIORITY_TONE: Record<OsPriority, string> = {
   baixa:   "bg-zinc-500/15 text-zinc-300 ring-zinc-500/30",
-  normal:  "bg-sky-500/15 text-sky-300 ring-sky-500/30",
-  alta:    "bg-amber-500/15 text-amber-300 ring-amber-500/30",
-  urgente: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
+  normal:  "bg-sky-500/15 text-sky-700 dark:text-sky-300 ring-sky-500/30",
+  alta:    "bg-amber-500/15 text-amber-700 dark:text-amber-300 ring-amber-500/30",
+  urgente: "bg-rose-500/15 text-rose-700 dark:text-rose-300 ring-rose-500/30",
 };
 
 function Card({ os }: { os: OsWithCustomer }) {
@@ -88,13 +88,13 @@ function Card({ os }: { os: OsWithCustomer }) {
         <div className="flex items-center justify-between mt-2 text-[11px] text-muted-foreground">
           <span className="flex items-center gap-1">
             {isOverdue && (
-              <span className="inline-flex items-center text-amber-400">
+              <span className="inline-flex items-center text-amber-700 dark:text-amber-400">
                 <AlertTriangle className="h-3 w-3 mr-0.5" /> atraso
               </span>
             )}
             {displayDate && (
               <span
-                className={`inline-flex items-center ${isOverdue ? "text-rose-400 font-medium" : ""}`}
+                className={`inline-flex items-center ${isOverdue ? "text-rose-700 dark:text-rose-400 font-medium" : ""}`}
                 title={displayLabel}
               >
                 <Clock className="h-3 w-3 mr-0.5" />

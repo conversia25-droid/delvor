@@ -114,9 +114,9 @@ type ItemDraft = {
 
 const PRIORITY_OPTS: { value: OsPriority; label: string; tone: string }[] = [
   { value: "baixa",   label: "Baixa",   tone: "bg-zinc-500/15 text-zinc-300 ring-zinc-500/30" },
-  { value: "normal",  label: "Normal",  tone: "bg-sky-500/15 text-sky-300 ring-sky-500/30" },
-  { value: "alta",    label: "Alta",    tone: "bg-amber-500/15 text-amber-300 ring-amber-500/30" },
-  { value: "urgente", label: "Urgente", tone: "bg-rose-500/15 text-rose-300 ring-rose-500/30" },
+  { value: "normal",  label: "Normal",  tone: "bg-sky-500/15 text-sky-700 dark:text-sky-300 ring-sky-500/30" },
+  { value: "alta",    label: "Alta",    tone: "bg-amber-500/15 text-amber-700 dark:text-amber-300 ring-amber-500/30" },
+  { value: "urgente", label: "Urgente", tone: "bg-rose-500/15 text-rose-700 dark:text-rose-300 ring-rose-500/30" },
 ];
 
 const ORIGIN_OPTS: { value: OsOrigin; label: string }[] = [
@@ -801,7 +801,7 @@ export default function ServiceOrderEditor() {
 
       {/* Aviso se for técnico puro vendo apenas */}
       {isPureTechnician && !isNew && (
-        <div className="rounded-md border border-sky-500/30 bg-sky-500/10 p-3 text-xs text-sky-300 flex items-start gap-2">
+        <div className="rounded-md border border-sky-500/30 bg-sky-500/10 p-3 text-xs text-sky-700 dark:text-sky-300 flex items-start gap-2">
           <Lock className="h-4 w-4 shrink-0 mt-0.5" />
           <span>
             Modo técnico — você foca no que importa: diagnóstico, solução, peças usadas e anexos.
@@ -1063,7 +1063,7 @@ export default function ServiceOrderEditor() {
           )}
 
           {items.some((i) => i.kind === "peca" && i.consumed && !i.id) && (
-            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300 flex items-start gap-2">
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2">
               <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
               <span>
                 Há peças marcadas como "consumidas" ainda não salvas. Ao clicar em <b>Salvar</b>,
@@ -1142,7 +1142,7 @@ export default function ServiceOrderEditor() {
             <AlertDialogDescription>
               Vai criar uma <b>nova venda</b> com todos os itens desta OS, marcar a OS como <b>faturada</b> e abrir a venda em modo edição.
               {items.some((i) => i.kind === "peca" && !i.consumed) && (
-                <span className="block mt-2 text-amber-400">
+                <span className="block mt-2 text-amber-700 dark:text-amber-400">
                   Atenção: há peças não consumidas — elas serão cobradas na venda mas não darão baixa no estoque pela OS.
                   Marque como consumidas antes se for o caso.
                 </span>

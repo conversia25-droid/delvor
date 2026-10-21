@@ -211,7 +211,7 @@ export default function SaleViewDialog({ saleId, open, onOpenChange }: SaleViewD
                 <span className="font-mono">{formatBRL(sale.subtotal)}</span>
               </div>
               {sale.discount > 0 && (
-                <div className="flex justify-between text-rose-400">
+                <div className="flex justify-between text-rose-700 dark:text-rose-400">
                   <span>Desconto</span>
                   <span className="font-mono">− {formatBRL(sale.discount)}</span>
                 </div>
@@ -245,8 +245,8 @@ export default function SaleViewDialog({ saleId, open, onOpenChange }: SaleViewD
                           </span>
                         )}
                         <Badge variant="outline" className={`text-[10px] ${
-                          p.status === "pago" ? "text-emerald-400" :
-                          p.status === "atrasado" ? "text-rose-400" : "text-muted-foreground"
+                          p.status === "pago" ? "text-emerald-700 dark:text-emerald-400" :
+                          p.status === "atrasado" ? "text-rose-700 dark:text-rose-400" : "text-muted-foreground"
                         }`}>
                           {p.status}
                         </Badge>

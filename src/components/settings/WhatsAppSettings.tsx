@@ -117,19 +117,19 @@ VITE_EVOLUTION_API_KEY=sua-master-api-key`}
       <div className="grid grid-cols-3 gap-3">
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs text-muted-foreground">Total</div>
-          <div className="text-2xl font-bold mt-1">{instances.length}</div>
+          <div className="text-2xl font-semibold tracking-tight mt-1">{instances.length}</div>
         </div>
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs text-muted-foreground flex items-center gap-1">
-            <CheckCircle2 className="h-3 w-3 text-emerald-400" /> Conectadas
+            <CheckCircle2 className="h-3 w-3 text-emerald-700 dark:text-emerald-400" /> Conectadas
           </div>
-          <div className="text-2xl font-bold mt-1 text-emerald-400">{connectedCount}</div>
+          <div className="text-2xl font-semibold tracking-tight mt-1 text-emerald-700 dark:text-emerald-400">{connectedCount}</div>
         </div>
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs text-muted-foreground flex items-center gap-1">
-            <AlertTriangle className="h-3 w-3 text-amber-400" /> Pendentes
+            <AlertTriangle className="h-3 w-3 text-amber-700 dark:text-amber-400" /> Pendentes
           </div>
-          <div className="text-2xl font-bold mt-1 text-amber-300">{instances.length - connectedCount}</div>
+          <div className="text-2xl font-semibold tracking-tight mt-1 text-amber-700 dark:text-amber-300">{instances.length - connectedCount}</div>
         </div>
       </div>
 

@@ -114,7 +114,7 @@ export default function MobileSalesList() {
           <TabsTrigger value="abertas" className="text-xs">
             Em aberto
             {abertas.length > 0 && (
-              <span className="ml-1.5 text-[10px] bg-blue-500/20 text-blue-300 rounded-full px-1.5 py-0.5">
+              <span className="ml-1.5 text-[10px] bg-blue-500/20 text-blue-700 dark:text-blue-300 rounded-full px-1.5 py-0.5">
                 {abertas.length}
               </span>
             )}
@@ -122,7 +122,7 @@ export default function MobileSalesList() {
           <TabsTrigger value="faturadas" className="text-xs">
             Faturadas
             {faturadas.length > 0 && (
-              <span className="ml-1.5 text-[10px] bg-emerald-500/20 text-emerald-300 rounded-full px-1.5 py-0.5">
+              <span className="ml-1.5 text-[10px] bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded-full px-1.5 py-0.5">
                 {faturadas.length}
               </span>
             )}

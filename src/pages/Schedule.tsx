@@ -208,8 +208,8 @@ export default function Schedule() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <CalendarIcon className="h-7 w-7" /> Agenda
+          <h1 className="text-[22px] font-semibold tracking-tight flex items-center gap-2">
+            <CalendarIcon className="h-5 w-5 text-primary" /> Agenda
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Visitas técnicas agendadas. Arraste para reagendar, clique pra abrir a OS.
@@ -227,15 +227,15 @@ export default function Schedule() {
       <div className="grid grid-cols-3 gap-3">
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs text-muted-foreground">Visitas hoje</div>
-          <div className="text-2xl font-bold mt-1 text-sky-400">{stats.todayCount}</div>
+          <div className="text-2xl font-semibold tracking-tight mt-1 text-sky-700 dark:text-sky-400">{stats.todayCount}</div>
         </div>
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs text-muted-foreground">Próximos 7 dias</div>
-          <div className="text-2xl font-bold mt-1">{stats.weekCount}</div>
+          <div className="text-2xl font-semibold tracking-tight mt-1">{stats.weekCount}</div>
         </div>
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs text-muted-foreground">OS em atraso (prazo)</div>
-          <div className={`text-2xl font-bold mt-1 ${stats.overdueCount > 0 ? "text-rose-400" : ""}`}>
+          <div className={`text-2xl font-semibold tracking-tight mt-1 ${stats.overdueCount > 0 ? "text-rose-700 dark:text-rose-400" : ""}`}>
             {stats.overdueCount}
           </div>
         </div>
