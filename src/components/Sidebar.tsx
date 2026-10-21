@@ -32,6 +32,10 @@ import {
   GraduationCap,
   ClipboardList,
   HandCoins,
+  ReceiptText,
+  Landmark,
+  FileBarChart,
+  TrendingUp,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink } from "./NavLink";
@@ -45,6 +49,7 @@ import { useOnboarding } from "@/contexts/OnboardingContext";
 import { useSidebarCollapsed } from "@/hooks/useSidebarCollapsed";
 import { useAddon } from "@/hooks/useAddon";
 import { useReceivablesOverview } from "@/hooks/useReceivablesOverview";
+import { usePayablesOverview } from "@/hooks/usePayablesOverview";
 
 /* =========================================================
    NAVIGATION COM CONTROLE DE PAPEL
@@ -76,8 +81,12 @@ const navigation = [
   { name: "Compras",      href: "/purchases",      group: "Estoque", icon: PackageOpen,  roles: ["admin", "gerente"], verticals: ["assistencia_tecnica", "deposito_construcao"] },
   // Núcleo (todos os ramos, sem add-on): badge = vencidos / vencendo hoje
   { name: "Contas a receber", href: "/financeiro/receber", group: "Financeiro", icon: HandCoins, badge: "receivables", roles: ["admin", "gerente", "financeiro"] },
-  { name: "Contas fixas",   href: "/financeiro/fixas",      group: "Financeiro", icon: CalendarClock, addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
-  { name: "Contas variáveis", href: "/financeiro/variaveis", group: "Financeiro", icon: Receipt,      addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
+  { name: "Contas a pagar",  href: "/financeiro/pagar",  group: "Financeiro", icon: ReceiptText,  badge: "payables", addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
+  { name: "Fluxo de caixa",  href: "/financeiro/fluxo",  group: "Financeiro", icon: TrendingUp,   addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
+  { name: "Contas e saldos", href: "/financeiro/contas", group: "Financeiro", icon: Landmark,     addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
+  { name: "DRE",             href: "/financeiro/dre",    group: "Financeiro", icon: FileBarChart, addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
+  { name: "Despesas fixas", href: "/financeiro/fixas",      group: "Financeiro", icon: CalendarClock, addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
+  { name: "Despesas variáveis", href: "/financeiro/variaveis", group: "Financeiro", icon: Receipt,      addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
   { name: "Categorias fin.",href: "/financeiro/categorias", group: "Financeiro", icon: Tags,          addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
   { name: "Precificação",   href: "/financeiro/precificacao", group: "Financeiro", icon: Calculator,  addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
   { name: "Relatórios",   href: "/reports",        group: "Financeiro", icon: BarChart3,    roles: ["admin", "gerente"] },
@@ -480,6 +489,7 @@ useEffect(() => {
   const financeiroAddon = useAddon("financeiro");
   const hasFinancialAccess = hasRole("admin") || hasRole("gerente") || hasRole("financeiro") || hasRole("super_admin");
   const receivables = useReceivablesOverview(hasFinancialAccess);
+  const payables = usePayablesOverview(hasFinancialAccess && financeiroAddon.active);
   const currentVertical = (user as any)?.vertical || "assistencia_tecnica";
   const filteredNavigation = navigation.filter((item) => {
     if (!item.roles.some((role) => hasRole(role))) return false;
@@ -708,14 +718,29 @@ function openAgenda(taskId?: string) {
             );
           }
 
-          // Alerta de recebíveis: vermelho = vencidos, âmbar = só vencendo hoje.
-          const recvBadge = (item as any).badge === "receivables" && receivables
-            ? receivables.overdue_count > 0
-              ? { n: receivables.overdue_count, cls: "bg-red-500", tip: `${receivables.overdue_count} vencido(s)` }
-              : receivables.due_today_count > 0
-                ? { n: receivables.due_today_count, cls: "bg-amber-500", tip: `${receivables.due_today_count} vencendo hoje` }
-                : null
-            : null;
+          // Alertas: vermelho = vencido ou boleto parado sem emitir; âmbar = vence hoje ou boleto a emitir.
+          const recvBadge = (() => {
+            const kind = (item as any).badge;
+            if (kind === "receivables" && receivables) {
+              const late = receivables.to_issue_late_count || 0;
+              const red = receivables.overdue_count + late;
+              if (red > 0) {
+                const tip = [receivables.overdue_count && `${receivables.overdue_count} vencido(s)`, late && `${late} boleto(s) parado(s) sem emitir`].filter(Boolean).join(", ");
+                return { n: red, cls: "bg-red-500", tip };
+              }
+              const toIssue = receivables.to_issue_count || 0;
+              const amber = receivables.due_today_count + toIssue;
+              if (amber > 0) {
+                const tip = [receivables.due_today_count && `${receivables.due_today_count} vencendo hoje`, toIssue && `${toIssue} boleto(s) a emitir`].filter(Boolean).join(", ");
+                return { n: amber, cls: "bg-amber-500", tip };
+              }
+            }
+            if (kind === "payables" && payables) {
+              if (payables.overdue_count > 0) return { n: payables.overdue_count, cls: "bg-red-500", tip: `${payables.overdue_count} conta(s) vencida(s)` };
+              if (payables.due_today_count > 0) return { n: payables.due_today_count, cls: "bg-amber-500", tip: `${payables.due_today_count} vencendo hoje` };
+            }
+            return null;
+          })();
 
           return (
             <NavLink

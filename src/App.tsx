@@ -55,6 +55,10 @@ const FinanceiroFixas = lazy(() => import("./pages/financeiro/DespesasFixas"));
 const FinanceiroVariaveis = lazy(() => import("./pages/financeiro/DespesasVariaveis"));
 const FinanceiroPrecificacao = lazy(() => import("./pages/financeiro/Precificacao"));
 const FinanceiroReceber = lazy(() => import("./pages/financeiro/Receber"));
+const FinanceiroPagar = lazy(() => import("./pages/financeiro/Pagar"));
+const FinanceiroFluxo = lazy(() => import("./pages/financeiro/Fluxo"));
+const FinanceiroContas = lazy(() => import("./pages/financeiro/Contas"));
+const FinanceiroDre = lazy(() => import("./pages/financeiro/Dre"));
 const MasterLogin = lazy(() => import("./pages/master/MasterLogin"));
 const MasterDashboard = lazy(() => import("./pages/master/MasterDashboard"));
 const MasterAnnouncements = lazy(() => import("./pages/master/MasterAnnouncements"));
@@ -524,6 +528,11 @@ function AppContent() {
           <Route path="/financeiro/precificacao" element={<ProtectedRoute><ProtectedLayout><FinanceiroPrecificacao /></ProtectedLayout></ProtectedRoute>} />
           {/* Contas a receber: núcleo (não depende do add-on financeiro) */}
           <Route path="/financeiro/receber" element={<ProtectedRoute><ProtectedLayout><FinanceiroReceber /></ProtectedLayout></ProtectedRoute>} />
+          {/* Financeiro completo (add-on): contas a pagar, fluxo, contas/saldos, DRE */}
+          <Route path="/financeiro/pagar" element={<ProtectedRoute><ProtectedLayout><FinanceiroPagar /></ProtectedLayout></ProtectedRoute>} />
+          <Route path="/financeiro/fluxo" element={<ProtectedRoute><ProtectedLayout><FinanceiroFluxo /></ProtectedLayout></ProtectedRoute>} />
+          <Route path="/financeiro/contas" element={<ProtectedRoute><ProtectedLayout><FinanceiroContas /></ProtectedLayout></ProtectedRoute>} />
+          <Route path="/financeiro/dre" element={<ProtectedRoute><ProtectedLayout><FinanceiroDre /></ProtectedLayout></ProtectedRoute>} />
 
           {/* Redirect do /agenda legado pra /schedule */}
           <Route path="/agenda" element={<Navigate to="/schedule" replace />} />

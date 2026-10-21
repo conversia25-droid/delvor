@@ -77,6 +77,7 @@ All colors MUST be HSL.
 
     --chart-1: 213 67% 50%;
     --chart-2: 158 73% 40%;
+    --chart-3: 17 82% 56%;
     --chart-grid: 218 25% 93%;
 
     --gradient-primary: linear-gradient(135deg, hsl(219 75% 48%) 0%, hsl(219 75% 40%) 100%);
@@ -142,6 +143,7 @@ All colors MUST be HSL.
 
     --chart-1: 213 77% 56%;
     --chart-2: 159 73% 36%;
+    --chart-3: 17 69% 50%;
     --chart-grid: 218 30% 15%;
 
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);

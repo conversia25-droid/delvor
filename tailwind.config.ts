@@ -26,6 +26,7 @@ export default {
         chart: {
           1: "hsl(var(--chart-1))",
           2: "hsl(var(--chart-2))",
+          3: "hsl(var(--chart-3))",
           grid: "hsl(var(--chart-grid))",
         },
         primary: {

@@ -15,6 +15,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useReceivablesOverview } from "@/hooks/useReceivablesOverview";
+import { usePayablesOverview } from "@/hooks/usePayablesOverview";
+import { useAddon } from "@/hooks/useAddon";
 import { useVertical } from "@/hooks/useVertical";
 
 import { Button } from "@/components/ui/button";
@@ -104,6 +106,8 @@ export default function Dashboard() {
   // Recebido / a receber (só quem tem acesso ao financeiro)
   const canSeeReceivables = !!perms.hasFinancialAccess;
   const receivables = useReceivablesOverview(canSeeReceivables);
+  const finAddon = useAddon("financeiro");
+  const payables = usePayablesOverview(canSeeReceivables && finAddon.active);
 
   const start = periodStart(period);
   const today = localISODate();
@@ -221,6 +225,32 @@ export default function Dashboard() {
         to: "/financeiro/receber", action: "Ver",
       });
     }
+    if (receivables && (receivables.to_issue_count || 0) > 0) {
+      const n = receivables.to_issue_count;
+      const late = receivables.to_issue_late_count || 0;
+      items.push({
+        key: "boleto-issue", tone: late > 0 ? "crit" : "warn", label: "Emitir",
+        title: `${n} boleto${n > 1 ? "s" : ""} a emitir · ${formatBRL(receivables.to_issue_total)}`,
+        detail: late > 0
+          ? `${late} parado${late > 1 ? "s" : ""} há mais de 1 dia: venda feita e boleto não gerado`
+          : "venda feita, falta gerar o boleto no banco",
+        to: "/financeiro/receber", action: "Emitir",
+      });
+    }
+    if (payables && payables.overdue_count > 0) {
+      items.push({
+        key: "pay-overdue", tone: "crit", label: "A pagar",
+        title: `${payables.overdue_count} conta${payables.overdue_count > 1 ? "s" : ""} vencida${payables.overdue_count > 1 ? "s" : ""} · ${formatBRL(payables.overdue_total)}`,
+        detail: "contas a pagar em atraso (juros correndo)",
+        to: "/financeiro/pagar", action: "Pagar",
+      });
+    } else if (payables && payables.due_today_count > 0) {
+      items.push({
+        key: "pay-today", tone: "warn", label: "Pagar hoje",
+        title: `${payables.due_today_count} conta${payables.due_today_count > 1 ? "s" : ""} vence${payables.due_today_count > 1 ? "m" : ""} hoje · ${formatBRL(payables.due_today_total)}`,
+        to: "/financeiro/pagar", action: "Pagar",
+      });
+    }
     if (usesOs && lateOs.length > 0) {
       items.push({
         key: "os-late", tone: "serious", label: "Atrasada",
@@ -245,8 +275,9 @@ export default function Dashboard() {
         to: "/pdv", action: "Fechar",
       });
     }
-    return items;
-  }, [receivables, usesOs, lateOs, lowStock, cashSession, today, perms.isManager, perms.isTecnico]);
+    const order = { crit: 0, serious: 1, warn: 2, info: 3 } as const;
+    return items.sort((a, b) => order[a.tone] - order[b.tone]);
+  }, [receivables, payables, usesOs, lateOs, lowStock, cashSession, today, perms.isManager, perms.isTecnico]);
 
   /* ---------- cabeçalho ---------- */
   const hour = new Date().getHours();

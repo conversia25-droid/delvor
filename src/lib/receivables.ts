@@ -70,6 +70,11 @@ export type ReceivablesOverview = {
   anticipated_month_count: number;
   anticipated_month_gross: number;
   fees_month: number;
+  /** boletos vendidos que ainda não foram gerados no banco (migration 58) */
+  to_issue_count: number;
+  to_issue_total: number;
+  /** a emitir há mais de 1 dia */
+  to_issue_late_count: number;
 };
 
 export async function fetchReceivablesOverview(): Promise<ReceivablesOverview | null> {
@@ -91,6 +96,9 @@ export async function fetchReceivablesOverview(): Promise<ReceivablesOverview | 
     anticipated_month_count: n(row.anticipated_month_count),
     anticipated_month_gross: n(row.anticipated_month_gross),
     fees_month: n(row.fees_month),
+    to_issue_count: n(row.to_issue_count),
+    to_issue_total: n(row.to_issue_total),
+    to_issue_late_count: n(row.to_issue_late_count),
   };
 }
 
@@ -113,6 +121,19 @@ export type Receivable = {
   cash_session_open: boolean | null;
   paid_by_name: string | null;
   notes: string | null;
+  /* migration 58 (ausentes em banco antigo) */
+  customer_id?: string | null;
+  customer_whatsapp?: string | null;
+  customer_remote_jid?: string | null;
+  created_at?: string | null;
+  issue_status?: "a_emitir" | "emitido" | null;
+  issued_at?: string | null;
+  issued_by_name?: string | null;
+  boleto_line?: string | null;
+  boleto_bank?: string | null;
+  boleto_number?: string | null;
+  sent_at?: string | null;
+  attachments_count?: number;
 };
 
 export async function listReceivables(
@@ -130,6 +151,7 @@ export async function listReceivables(
     amount: Number(r.amount || 0),
     received_amount: r.received_amount == null ? null : Number(r.received_amount),
     fee_amount: Number(r.fee_amount || 0),
+    attachments_count: Number(r.attachments_count || 0),
   })) as Receivable[];
   return { data: rows, error: null };
 }
@@ -148,13 +170,17 @@ export async function registerReceipts(opts: {
   paidOn?: string | null;
   receivedTotal?: number | null;
   notes?: string | null;
+  /** conta onde o dinheiro caiu (migration 60). Só vai pro banco quando escolhida. */
+  accountId?: string | null;
 }): Promise<{ result: ReceiptResult | null; error: string | null }> {
-  const { data, error } = await supabase.rpc("register_payment_receipts" as any, {
+  const args: Record<string, unknown> = {
     p_ids: opts.ids,
     p_paid_on: opts.paidOn ?? null,
     p_received_total: opts.receivedTotal ?? null,
     p_notes: opts.notes ?? null,
-  });
+  };
+  if (opts.accountId) args.p_account_id = opts.accountId;
+  const { data, error } = await supabase.rpc("register_payment_receipts" as any, args);
   if (error) return { result: null, error: error.message };
   const row = Array.isArray(data) ? data[0] : data;
   notifyReceivablesChanged();
