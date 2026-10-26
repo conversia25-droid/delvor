@@ -43,7 +43,9 @@ export default defineConfig(({ mode }) => ({
         background_color: "#1e3a8a",
         display: "standalone",
         orientation: "portrait",
-        start_url: "/m/orders",
+        // Abre na raiz: o RootRedirect manda cada papel pro lugar certo
+        // (técnico puro → /m/orders; admin/gerente/vendedor → /dashboard).
+        start_url: "/",
         scope: "/",
         lang: "pt-BR",
         icons: [

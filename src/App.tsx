@@ -185,6 +185,9 @@ function RootRedirect() {
     if (isTec && !isManager && !isSeller) return <Navigate to="/m/orders" replace />;
     return <Navigate to="/dashboard" replace />;
   }
+  // App instalado (PWA) não mostra a página de vendas: vai direto pro login.
+  const standalone = window.matchMedia?.("(display-mode: standalone)").matches || (navigator as any).standalone === true;
+  if (standalone) return <Navigate to="/login" replace />;
   return <LandingPage />;
 }
 
