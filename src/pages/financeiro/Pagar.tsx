@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  AlertTriangle, CalendarClock, CheckCircle2, Copy, Loader2, MoreHorizontal, Paperclip, Pencil,
+  AlertTriangle, CalendarClock, CheckCircle2, Copy, History, Landmark, Loader2, MoreHorizontal, Paperclip, Pencil,
   Plus, Receipt, Search, Undo2, XCircle,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -25,11 +25,13 @@ import {
 import MoneyInput from "@/components/MoneyInput";
 import AddonUpsell from "@/components/addons/AddonUpsell";
 import { AttachFileField, AttachmentsDialog } from "@/components/finance/Attachments";
+import { HistoryDialog, ReasonDialog, type ReasonRequest } from "@/components/finance/Dialogs";
+import { LoanDialog, LoansPanel } from "@/components/finance/Loans";
 import { formatBRL } from "@/lib/formatters";
 import { addDaysISO, daysUntil, localISODate, METHOD_LABELS } from "@/lib/receivables";
 import {
-  createPayables, fetchAccountBalances, fetchExpenseCategories, fetchPayablesOverview, fetchSuppliersLite,
-  formatBoletoLine, listPayables, MISSING_DB_MSG, payPayables, revertPayable, updatePayable, uploadAttachment,
+  cancelPayable, createPayables, fetchAccountBalances, fetchExpenseCategories, fetchPayablesOverview, fetchSuppliersLite,
+  formatBoletoLine, listPayables, MISSING_DB_MSG, payPayablePartial, payPayables, revertPayable, updatePayable, uploadAttachment,
   type AccountBalance, type Payable, type PayablesOverview,
 } from "@/lib/finance";
 
@@ -55,9 +57,9 @@ function Tile({ label, value, sub, dot, active, onClick }: { label: string; valu
   );
 }
 const PAY_METHODS = ["pix", "boleto", "transferencia", "dinheiro", "cartao_credito", "cartao_debito", "outro"];
-const SOURCE_LABEL: Record<string, string> = { fixa: "fixa", compra: "compra", variavel: "avulsa" };
+const SOURCE_LABEL: Record<string, string> = { fixa: "fixa", compra: "compra", variavel: "avulsa", emprestimo: "empréstimo" };
 
-type Tab = "aberto" | "pagas";
+type Tab = "aberto" | "pagas" | "emprestimos";
 type OpenFilter = "todas" | "vencidas" | "hoje" | "semana";
 type Period = "mes" | "mes_passado" | "90d";
 function periodRange(p: Period) {
@@ -119,7 +121,13 @@ function PagarInner() {
   const [payProof, setPayProof] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const [payMode, setPayMode] = useState<"desconto" | "parcial">("parcial");
+
   const [attachRow, setAttachRow] = useState<Payable | null>(null);
+  const [historyRow, setHistoryRow] = useState<Payable | null>(null);
+  const [reasonReq, setReasonReq] = useState<ReasonRequest | null>(null);
+  const [loanOpen, setLoanOpen] = useState(false);
+  const [loanKey, setLoanKey] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -213,17 +221,32 @@ function PagarInner() {
   function openPay(ids: string[]) {
     const list = rows.filter((p) => ids.includes(p.id));
     setPayIds(ids); setPayOn(localISODate()); setPayValue(list.reduce((s, p) => s + p.amount, 0));
-    setPayMethod("pix"); setPayNote(""); setPayProof(null);
+    setPayMethod("pix"); setPayNote(""); setPayProof(null); setPayMode("parcial");
     setPayAccount(accounts.find((a) => a.default_methods.includes("pix"))?.id || accounts.find((a) => a.kind === "banco")?.id || "");
   }
   const payRows = payIds ? rows.filter((p) => payIds.includes(p.id)) : [];
   const payGross = payRows.reduce((s, p) => s + p.amount, 0);
   const payDiff = Math.round((payValue - payGross) * 100) / 100;
+  // parcial: uma conta só, valor menor, e não é despesa fixa (essa se ajusta na tela de fixas)
+  const canPartialPay = payRows.length === 1 && payDiff < -0.004 && payValue > 0 && payRows[0].source !== "fixa";
+  const isPartialPay = canPartialPay && payMode === "parcial";
 
   async function confirmPay() {
     if (!payIds) return;
     if (payValue <= 0) { toast({ title: "Informe o valor pago", variant: "destructive" }); return; }
     setSaving(true);
+    if (isPartialPay) {
+      const r = await payPayablePartial({ id: payIds[0], amount: payValue, paidOn: payOn, accountId: payAccount || null, method: payMethod, notes: payNote });
+      if (r.error) { setSaving(false); toast({ title: "Não foi possível registrar o parcial", description: r.error, variant: "destructive" }); return; }
+      if (payProof) {
+        const up = await uploadAttachment({ companyId, entity: "payable", entityId: payIds[0], kind: "comprovante", file: payProof });
+        if (up.error) toast({ title: "Pago, mas o comprovante não foi anexado", description: up.error, variant: "destructive" });
+      }
+      setSaving(false);
+      toast({ title: "Pagamento parcial registrado", description: `${formatBRL(payGross - payValue)} continua em aberto.` });
+      setPayIds(null); setSelected(new Set()); load();
+      return;
+    }
     const r = await payPayables({
       ids: payIds, paidOn: payOn, paidTotal: Math.abs(payDiff) < 0.005 ? null : payValue,
       accountId: payAccount || null, method: payMethod, notes: payNote,
@@ -238,24 +261,40 @@ function PagarInner() {
     setPayIds(null); setSelected(new Set()); load();
   }
 
-  async function undoPay(p: Payable) {
-    if (!window.confirm(`Desfazer o pagamento de "${p.description}"? A conta volta para Em aberto.`)) return;
-    const { error } = await revertPayable(p.id);
-    if (error) { toast({ title: "Não foi possível desfazer", description: error, variant: "destructive" }); return; }
-    load();
+  function undoPay(p: Payable) {
+    setReasonReq({
+      title: "Desfazer pagamento",
+      description: `"${p.description}" · ${formatBRL(p.paid_amount ?? p.amount)}. A conta volta para Em aberto.`,
+      confirmLabel: "Desfazer pagamento",
+      destructive: true,
+      onConfirm: async (reason) => {
+        const { error } = await revertPayable(p.id, reason);
+        if (error) return error;
+        load();
+        return null;
+      },
+    });
   }
-  async function cancel(p: Payable) {
-    const what = p.source === "fixa" ? "Pular esta despesa fixa neste mês?" : `Cancelar a conta "${p.description}"?`;
-    if (!window.confirm(`${what}\n\nEla sai das contas em aberto e do fluxo de caixa.`)) return;
-    const { error } = await updatePayable(p.id, { status: "cancelada" });
-    if (error) { toast({ title: "Não foi possível cancelar", description: error, variant: "destructive" }); return; }
-    load();
+  function cancel(p: Payable) {
+    setReasonReq({
+      title: p.source === "fixa" ? "Pular esta despesa fixa neste mês" : "Cancelar conta",
+      description: `"${p.description}" · ${formatBRL(p.amount)}. Ela sai das contas em aberto e do fluxo de caixa.`,
+      confirmLabel: p.source === "fixa" ? "Pular este mês" : "Cancelar conta",
+      destructive: true,
+      placeholder: "Ex.: lançada em duplicidade; fornecedor deu baixa",
+      onConfirm: async (reason) => {
+        const { error } = await cancelPayable(p.id, reason);
+        if (error) return error;
+        load();
+        return null;
+      },
+    });
   }
 
   if (missing) {
     return (
       <div className="space-y-4">
-        <Header onNew={openNew} disabled />
+        <Header onNew={openNew} onNewLoan={() => setLoanOpen(true)} disabled />
         <div className="rounded-[10px] border bg-card px-6 py-14 text-center text-sm text-muted-foreground">{MISSING_DB_MSG}</div>
       </div>
     );
@@ -263,7 +302,7 @@ function PagarInner() {
 
   return (
     <div className="space-y-6">
-      <Header onNew={openNew} />
+      <Header onNew={openNew} onNewLoan={() => setLoanOpen(true)} />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         <Tile label="Vencidas" dot={ov && ov.overdue_count > 0 ? "bg-red-500" : undefined} value={ov ? formatBRL(ov.overdue_total) : "—"}
@@ -281,12 +320,12 @@ function PagarInner() {
       </div>
 
       <div className="flex flex-wrap items-center gap-1 border-b">
-        {([["aberto", `Em aberto${openCount ? ` (${openCount})` : ""}`], ["pagas", "Pagas"]] as const).map(([k, label]) => (
+        {([["aberto", `Em aberto${openCount ? ` (${openCount})` : ""}`], ["pagas", "Pagas"], ["emprestimos", "Empréstimos"]] as const).map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)} className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${tab === k ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>{label}</button>
         ))}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      {tab !== "emprestimos" && <div className="flex flex-wrap items-center gap-2">
         {tab === "aberto"
           ? ([["todas", "Todas"], ["vencidas", "Vencidas"], ["hoje", "Vencem hoje"], ["semana", "Próximos 7 dias"]] as const).map(([k, label]) => (
             <button key={k} onClick={() => setOpenFilter(k)} className={`rounded-full px-3 py-1 text-xs font-medium ring-1 ring-inset transition-colors ${openFilter === k ? "bg-primary text-primary-foreground ring-primary" : "text-muted-foreground ring-border hover:text-foreground"}`}>{label}</button>
@@ -302,7 +341,7 @@ function PagarInner() {
           <Search className="pointer-events-none absolute left-2.5 top-2 h-4 w-4 text-muted-foreground" />
           <Input id="pay-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Descrição, fornecedor ou documento" className="h-8 pl-8 text-sm" />
         </div>
-      </div>
+      </div>}
 
       {tab === "aberto" && selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-[10px] border border-primary/40 bg-accent/40 px-4 py-2.5 text-sm">
@@ -313,7 +352,9 @@ function PagarInner() {
       )}
 
       <div className="overflow-x-auto rounded-[10px] border bg-card">
-        {loading ? (
+        {tab === "emprestimos" ? (
+          <LoansPanel reloadKey={loanKey} onChanged={load} onNew={() => setLoanOpen(true)} />
+        ) : loading ? (
           <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Carregando…</div>
         ) : error ? (
           <div className="px-6 py-14 text-center text-sm text-muted-foreground">Não foi possível carregar: {error}</div>
@@ -354,7 +395,7 @@ function PagarInner() {
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
                         <Button size="sm" variant="outline" onClick={() => openPay([p.id])}>Pagar</Button>
-                        <PayableMenu p={p} onAttach={() => setAttachRow(p)} onEdit={() => openEdit(p)} onCancel={() => cancel(p)} toast={toast} />
+                        <PayableMenu p={p} onAttach={() => setAttachRow(p)} onHistory={() => setHistoryRow(p)} onEdit={() => openEdit(p)} onCancel={() => cancel(p)} toast={toast} />
                       </div>
                     </TableCell>
                   </TableRow>
@@ -405,6 +446,7 @@ function PagarInner() {
                         <div className="flex items-center justify-end gap-1">
                           <Button size="sm" variant="ghost" onClick={() => undoPay(p)}><Undo2 className="mr-1 h-3.5 w-3.5" /> Desfazer</Button>
                           <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setAttachRow(p)} aria-label="Anexos"><Paperclip className="h-4 w-4" /></Button>
+                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setHistoryRow(p)} aria-label="Histórico"><History className="h-4 w-4" /></Button>
                         </div>
                       )}
                     </TableCell>
@@ -512,7 +554,19 @@ function PagarInner() {
               </div>
             </div>
             {payDiff > 0.004 && <p className="text-xs text-red-700 dark:text-red-400">Juros / multa: +{formatBRL(payDiff)}</p>}
-            {payDiff < -0.004 && <p className="text-xs text-emerald-700 dark:text-emerald-400">Desconto: {formatBRL(-payDiff)}</p>}
+            {canPartialPay && (
+              <div className="space-y-1.5 rounded-md border px-3 py-2.5 text-sm">
+                <label className="flex cursor-pointer items-start gap-2">
+                  <input type="radio" name="pay-mode" className="mt-1" checked={payMode === "parcial"} onChange={() => setPayMode("parcial")} />
+                  <span>Pagamento parcial: <strong className="num">{formatBRL(payGross - payValue)}</strong> continua em aberto, mesmo vencimento</span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-2">
+                  <input type="radio" name="pay-mode" className="mt-1" checked={payMode === "desconto"} onChange={() => setPayMode("desconto")} />
+                  <span>A diferença é desconto (quita a conta)</span>
+                </label>
+              </div>
+            )}
+            {payDiff < -0.004 && !isPartialPay && <p className="text-xs text-emerald-700 dark:text-emerald-400">Desconto: {formatBRL(-payDiff)}</p>}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="pp-acc" className="text-xs">Saiu de</Label>
@@ -551,11 +605,19 @@ function PagarInner() {
         defaultKind={attachRow?.status === "paga" ? "comprovante" : "boleto"}
         onChanged={load}
       />
+
+      <LoanDialog open={loanOpen} onOpenChange={setLoanOpen} accounts={accounts} categories={categories}
+        onCreated={() => { setLoanKey((k) => k + 1); setTab("emprestimos"); load(); }} />
+      <ReasonDialog request={reasonReq} onClose={() => setReasonReq(null)} />
+      <HistoryDialog
+        target={historyRow ? { entity: "payable", id: historyRow.id, title: `${historyRow.description} · ${formatBRL(historyRow.amount)}` } : null}
+        onClose={() => setHistoryRow(null)}
+      />
     </div>
   );
 }
 
-function Header({ onNew, disabled }: { onNew: () => void; disabled?: boolean }) {
+function Header({ onNew, onNewLoan, disabled }: { onNew: () => void; onNewLoan: () => void; disabled?: boolean }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div>
@@ -564,12 +626,15 @@ function Header({ onNew, disabled }: { onNew: () => void; disabled?: boolean }) 
           Fornecedores, impostos e contas do mês. As despesas fixas entram aqui sozinhas a cada mês; pagar aqui ou na tela de fixas dá no mesmo.
         </p>
       </div>
-      <Button onClick={onNew} disabled={disabled}><Plus className="mr-2 h-4 w-4" /> Nova conta</Button>
+      <div className="flex gap-2">
+        <Button variant="outline" onClick={onNewLoan} disabled={disabled}><Landmark className="mr-2 h-4 w-4" /> Novo empréstimo</Button>
+        <Button onClick={onNew} disabled={disabled}><Plus className="mr-2 h-4 w-4" /> Nova conta</Button>
+      </div>
     </div>
   );
 }
 
-function PayableMenu({ p, onAttach, onEdit, onCancel, toast }: { p: Payable; onAttach: () => void; onEdit: () => void; onCancel: () => void; toast: ReturnType<typeof useToast>["toast"] }) {
+function PayableMenu({ p, onAttach, onHistory, onEdit, onCancel, toast }: { p: Payable; onAttach: () => void; onHistory: () => void; onEdit: () => void; onCancel: () => void; toast: ReturnType<typeof useToast>["toast"] }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -577,6 +642,7 @@ function PayableMenu({ p, onAttach, onEdit, onCancel, toast }: { p: Payable; onA
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
         <DropdownMenuItem onClick={onAttach}><Paperclip className="mr-2 h-4 w-4" /> Anexos{p.attachments_count ? ` (${p.attachments_count})` : ""}</DropdownMenuItem>
+        <DropdownMenuItem onClick={onHistory}><History className="mr-2 h-4 w-4" /> Histórico</DropdownMenuItem>
         {p.boleto_line && (
           <DropdownMenuItem onClick={async () => {
             try { await navigator.clipboard.writeText(formatBoletoLine(p.boleto_line)); toast({ title: "Linha digitável copiada" }); }
@@ -587,10 +653,16 @@ function PayableMenu({ p, onAttach, onEdit, onCancel, toast }: { p: Payable; onA
         {p.source === "fixa" && (
           <DropdownMenuItem asChild><Link to="/financeiro/fixas"><Pencil className="mr-2 h-4 w-4" /> Editar despesa fixa</Link></DropdownMenuItem>
         )}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={onCancel} className="text-red-700 dark:text-red-400">
-          <XCircle className="mr-2 h-4 w-4" /> {p.source === "fixa" ? "Pular este mês" : "Cancelar conta"}
-        </DropdownMenuItem>
+        {p.source === "emprestimo" ? (
+          <DropdownMenuItem disabled className="text-xs">Parcela de empréstimo: ajuste na aba Empréstimos</DropdownMenuItem>
+        ) : (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onCancel} className="text-red-700 dark:text-red-400">
+              <XCircle className="mr-2 h-4 w-4" /> {p.source === "fixa" ? "Pular este mês" : "Cancelar conta"}
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

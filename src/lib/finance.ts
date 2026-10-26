@@ -35,8 +35,18 @@ export async function registerBoletoIssue(o: {
   if (!error) notifyReceivablesChanged();
   return { error: error?.message ?? null };
 }
-export async function revertBoletoIssue(id: string) {
-  const { error } = await db.rpc("revert_boleto_issue", { p_id: id });
+/** Chama a RPC com o motivo; se o banco ainda não tem a versão com motivo (62), repete sem. */
+async function rpcWithReason(fn: string, args: Record<string, unknown>, reason?: string | null) {
+  const full = reason ? { ...args, p_reason: reason } : args;
+  let { data, error } = await db.rpc(fn, full);
+  if (error && reason && /p_reason|could not find the function/i.test(error.message)) {
+    ({ data, error } = await db.rpc(fn, args));
+  }
+  return { data, error };
+}
+
+export async function revertBoletoIssue(id: string, reason?: string | null) {
+  const { error } = await rpcWithReason("revert_boleto_issue", { p_id: id }, reason);
   if (!error) notifyReceivablesChanged();
   return { error: error?.message ?? null };
 }
@@ -156,7 +166,7 @@ export async function createTransfer(o: {
   });
   return { error: error?.message ?? null };
 }
-export type StatementLine = { moved_on: string; kind: "recebimento" | "pagamento" | "transferencia"; description: string; amount: number; ref_id: string };
+export type StatementLine = { moved_on: string; kind: "recebimento" | "pagamento" | "transferencia" | "movimento"; description: string; amount: number; ref_id: string };
 export async function fetchAccountStatement(accountId: string, from: string, to: string): Promise<Res<StatementLine[]>> {
   const { data, error } = await db.rpc("account_statement", { p_account_id: accountId, p_from: from, p_to: to });
   if (error) return fail([], error);
@@ -170,7 +180,7 @@ export type Payable = {
   amount: number; due_date: string; status: "aberta" | "paga" | "cancelada";
   paid_at: string | null; paid_amount: number | null; account_id: string | null; account_name: string | null;
   payment_method: string | null; document_number: string | null; boleto_line: string | null;
-  source: "manual" | "fixa" | "compra" | "variavel"; month_ref: string | null;
+  source: "manual" | "fixa" | "compra" | "variavel" | "emprestimo"; month_ref: string | null;
   installment_no: number | null; installment_total: number | null; notes: string | null;
   attachments_count: number; created_at: string;
 };
@@ -253,12 +263,172 @@ export async function payPayables(o: {
   window.dispatchEvent(new Event(PAYABLES_CHANGED));
   return { error: null, paidTotal: num(r?.paid_total) };
 }
-export async function revertPayable(id: string) {
-  const { error } = await db.rpc("revert_payable", { p_id: id });
+export async function revertPayable(id: string, reason?: string | null) {
+  const { error } = await rpcWithReason("revert_payable", { p_id: id }, reason);
+  if (!error) window.dispatchEvent(new Event(PAYABLES_CHANGED));
+  return { error: error?.message ?? null };
+}
+/** Cancela com motivo (62). Banco sem a 62: cai no update direto antigo. */
+export async function cancelPayable(id: string, reason: string) {
+  const { error } = await db.rpc("cancel_payable", { p_id: id, p_reason: reason });
+  if (error && isMissingDbObject(error)) return updatePayable(id, { status: "cancelada" });
   if (!error) window.dispatchEvent(new Event(PAYABLES_CHANGED));
   return { error: error?.message ?? null };
 }
 export const PAYABLES_CHANGED = "payables-changed";
+
+/* ---------- Pagamento parcial (62) ---------- */
+export async function registerPartialReceipt(o: {
+  id: string; amount: number; paidOn?: string | null; accountId?: string | null; notes?: string | null;
+}): Promise<{ restId: string | null; error: string | null }> {
+  const { data, error } = await db.rpc("register_partial_receipt", {
+    p_id: o.id, p_amount: o.amount, p_paid_on: o.paidOn || null, p_account_id: o.accountId || null, p_notes: o.notes || null,
+  });
+  if (error) return { restId: null, error: isMissingDbObject(error) ? MISSING_DB_MSG : error.message };
+  notifyReceivablesChanged();
+  return { restId: (data as any) ?? null, error: null };
+}
+export async function payPayablePartial(o: {
+  id: string; amount: number; paidOn?: string | null; accountId?: string | null; method?: string | null; notes?: string | null;
+}): Promise<{ restId: string | null; error: string | null }> {
+  const { data, error } = await db.rpc("pay_payable_partial", {
+    p_id: o.id, p_amount: o.amount, p_paid_on: o.paidOn || null, p_account_id: o.accountId || null,
+    p_method: o.method || null, p_notes: o.notes || null,
+  });
+  if (error) return { restId: null, error: isMissingDbObject(error) ? MISSING_DB_MSG : error.message };
+  window.dispatchEvent(new Event(PAYABLES_CHANGED));
+  return { restId: (data as any) ?? null, error: null };
+}
+
+/* ---------- Histórico (62) ---------- */
+export type HistoryEntry = {
+  created_at: string; action: string; user_name: string;
+  old_data: Record<string, unknown> | null; new_data: Record<string, unknown> | null; reason: string | null;
+};
+export async function fetchFinanceHistory(entity: "sale_payment" | "payable", id: string): Promise<Res<HistoryEntry[]>> {
+  const { data, error } = await db.rpc("finance_history", { p_entity: entity, p_entity_id: id });
+  if (error) return fail([], error);
+  return { data: (data as HistoryEntry[]) || [], error: null };
+}
+
+/* ---------- Fechamento de mês (62) ---------- */
+export type FinanceMonth = {
+  month: string; closed: boolean; closed_at: string | null; closed_by_name: string | null;
+  reopened_at: string | null; reopened_by_name: string | null; reopen_reason: string | null;
+  receivables_open: number; payables_open: number; boletos_to_issue: number;
+  payments_no_account: number; cash_sessions_open: number;
+};
+export async function fetchFinanceMonths(n = 12): Promise<Res<FinanceMonth[]>> {
+  const { data, error } = await db.rpc("finance_months", { p_months: n });
+  if (error) return fail([], error);
+  return {
+    data: ((data as any[]) || []).map((r) => ({
+      ...r, month: String(r.month).slice(0, 10),
+      receivables_open: num(r.receivables_open), payables_open: num(r.payables_open), boletos_to_issue: num(r.boletos_to_issue),
+      payments_no_account: num(r.payments_no_account), cash_sessions_open: num(r.cash_sessions_open),
+    })),
+    error: null,
+  };
+}
+export async function closeFinanceMonth(month: string) {
+  const { error } = await db.rpc("close_finance_month", { p_month: month });
+  return { error: error?.message ?? null };
+}
+export async function reopenFinanceMonth(month: string, reason: string) {
+  const { error } = await db.rpc("reopen_finance_month", { p_month: month, p_reason: reason });
+  return { error: error?.message ?? null };
+}
+
+/* ---------- Empréstimos (63) ---------- */
+export type LoanSchedule = { n: number; due: string; amount: number; interest: number; principal: number; balance: number }[];
+/**
+ * Mesma conta da RPC create_loan (Tabela Price): com taxa → parcela fixa;
+ * com parcela → acha a taxa por bisseção; sem nenhum → sem juros.
+ */
+export function simulateLoan(o: { principal: number; n: number; firstDue: string; ratePct?: number | null; installment?: number | null }):
+  { rate: number; installment: number; totalInterest: number; schedule: LoanSchedule; error: string | null } {
+  const P = Math.round(o.principal * 100) / 100;
+  const n = Math.floor(o.n);
+  const r2 = (v: number) => Math.round(v * 100) / 100;
+  if (!(P > 0) || !(n >= 1)) return { rate: 0, installment: 0, totalInterest: 0, schedule: [], error: null };
+  let i = 0, pmt = 0;
+  if (o.installment != null && o.installment > 0) {
+    pmt = r2(o.installment);
+    if (pmt * n < P - 0.01) return { rate: 0, installment: pmt, totalInterest: 0, schedule: [], error: `As parcelas somam ${(pmt * n).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}, abaixo do valor recebido.` };
+    if (pmt * n > P + 0.005) {
+      let lo = 1e-7, hi = 1;
+      for (let k = 0; k < 120; k++) { const mid = (lo + hi) / 2; const f = pmt * (1 - Math.pow(1 + mid, -n)) / mid - P; if (f > 0) lo = mid; else hi = mid; }
+      i = Math.round(((lo + hi) / 2) * 1e8) / 1e8;
+    }
+  } else if (o.ratePct != null && o.ratePct > 0) {
+    i = o.ratePct / 100;
+    pmt = r2(P * i / (1 - Math.pow(1 + i, -n)));
+  } else {
+    pmt = r2(P / n);
+  }
+  const [y, m, d] = o.firstDue.split("-").map(Number);
+  let bal = P, tot = 0;
+  const schedule: LoanSchedule = [];
+  for (let k = 1; k <= n; k++) {
+    const int = r2(bal * i);
+    const princ = k < n ? r2(pmt - int) : bal;
+    const amount = k < n ? pmt : r2(princ + int);
+    bal = r2(bal - princ);
+    tot = r2(tot + int);
+    const last = new Date(y, m - 1 + k, 0).getDate();
+    const due = new Date(y, m - 1 + (k - 1), Math.min(d, last));
+    const iso = `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, "0")}-${String(due.getDate()).padStart(2, "0")}`;
+    schedule.push({ n: k, due: iso, amount, interest: int, principal: princ, balance: bal });
+  }
+  return { rate: i, installment: pmt, totalInterest: tot, schedule, error: null };
+}
+export async function createLoan(o: {
+  description: string; principal: number; receivedOn: string; accountId: string; installments: number; firstDue: string;
+  ratePct?: number | null; installment?: number | null; lender?: string | null; categoryId?: string | null; notes?: string | null;
+}): Promise<{ id: string | null; error: string | null }> {
+  const { data, error } = await db.rpc("create_loan", {
+    p_description: o.description, p_principal: o.principal, p_received_on: o.receivedOn, p_account_id: o.accountId,
+    p_installments: o.installments, p_first_due: o.firstDue,
+    p_monthly_rate_pct: o.ratePct ?? null, p_installment_amount: o.installment ?? null,
+    p_lender: o.lender || null, p_category_id: o.categoryId || null, p_notes: o.notes || null,
+  });
+  if (error) return { id: null, error: isMissingDbObject(error) ? MISSING_DB_MSG : error.message };
+  window.dispatchEvent(new Event(PAYABLES_CHANGED));
+  return { id: (data as any) ?? null, error: null };
+}
+export type Loan = {
+  id: string; description: string; lender: string | null; principal: number; received_on: string; account_name: string | null;
+  installments: number; installment_amount: number; monthly_rate: number; total_interest: number; first_due: string;
+  paid_count: number; open_count: number; overdue_count: number; balance_principal: number; open_total: number;
+  interest_paid: number; next_due: string | null; next_amount: number | null;
+};
+export async function listLoans(): Promise<Res<Loan[]>> {
+  const { data, error } = await db.rpc("list_loans");
+  if (error) return fail([], error);
+  return {
+    data: ((data as any[]) || []).map((r) => ({
+      ...r, principal: num(r.principal), installment_amount: num(r.installment_amount), monthly_rate: num(r.monthly_rate),
+      total_interest: num(r.total_interest), paid_count: num(r.paid_count), open_count: num(r.open_count),
+      overdue_count: num(r.overdue_count), balance_principal: num(r.balance_principal), open_total: num(r.open_total),
+      interest_paid: num(r.interest_paid), next_amount: r.next_amount == null ? null : num(r.next_amount),
+      received_on: String(r.received_on).slice(0, 10), first_due: String(r.first_due).slice(0, 10),
+      next_due: r.next_due ? String(r.next_due).slice(0, 10) : null,
+    })),
+    error: null,
+  };
+}
+export async function fetchLoanInstallments(loanId: string) {
+  const { data, error } = await db.from("payables")
+    .select("id, installment_no, due_date, amount, principal_part, interest_part, status, paid_at, paid_amount")
+    .eq("loan_id", loanId).order("installment_no");
+  if (error) return fail([] as any[], error);
+  return { data: ((data as any[]) || []).map((r) => ({ ...r, amount: num(r.amount), principal_part: num(r.principal_part), interest_part: num(r.interest_part) })), error: null };
+}
+export async function deleteLoan(id: string) {
+  const { error } = await db.rpc("delete_loan", { p_id: id });
+  if (!error) window.dispatchEvent(new Event(PAYABLES_CHANGED));
+  return { error: error?.message ?? null };
+}
 
 /* ---------- Fluxo de caixa ---------- */
 export type CashFlowDay = { day: string; in_realized: number; out_realized: number; in_expected: number; out_expected: number };
@@ -275,7 +445,11 @@ export async function fetchCashFlow(from: string, to: string): Promise<Res<CashF
 }
 
 /* ---------- DRE ---------- */
-export type DreLine = { month: string; line: "receita" | "cmv" | "comissao" | "taxa" | "despesa"; label: string; amount: number };
+export type DreLine = {
+  month: string;
+  line: "receita" | "cmv" | "comissao" | "taxa" | "despesa" | "juros_emprestimo" | "encargos" | "descontos" | "receita_financeira";
+  label: string; amount: number;
+};
 export async function fetchDre(from: string, to: string): Promise<Res<DreLine[]>> {
   const { data, error } = await db.rpc("dre_monthly", { p_from: from, p_to: to });
   if (error) return fail([], error);

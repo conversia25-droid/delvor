@@ -59,6 +59,7 @@ const FinanceiroPagar = lazy(() => import("./pages/financeiro/Pagar"));
 const FinanceiroFluxo = lazy(() => import("./pages/financeiro/Fluxo"));
 const FinanceiroContas = lazy(() => import("./pages/financeiro/Contas"));
 const FinanceiroDre = lazy(() => import("./pages/financeiro/Dre"));
+const FinanceiroFechamento = lazy(() => import("./pages/financeiro/Fechamento"));
 const MasterLogin = lazy(() => import("./pages/master/MasterLogin"));
 const MasterDashboard = lazy(() => import("./pages/master/MasterDashboard"));
 const MasterAnnouncements = lazy(() => import("./pages/master/MasterAnnouncements"));
@@ -533,6 +534,8 @@ function AppContent() {
           <Route path="/financeiro/fluxo" element={<ProtectedRoute><ProtectedLayout><FinanceiroFluxo /></ProtectedLayout></ProtectedRoute>} />
           <Route path="/financeiro/contas" element={<ProtectedRoute><ProtectedLayout><FinanceiroContas /></ProtectedLayout></ProtectedRoute>} />
           <Route path="/financeiro/dre" element={<ProtectedRoute><ProtectedLayout><FinanceiroDre /></ProtectedLayout></ProtectedRoute>} />
+          {/* Fechamento de mês: núcleo, vale também para Contas a receber */}
+          <Route path="/financeiro/fechamento" element={<ProtectedRoute><ProtectedLayout><FinanceiroFechamento /></ProtectedLayout></ProtectedRoute>} />
 
           {/* Redirect do /agenda legado pra /schedule */}
           <Route path="/agenda" element={<Navigate to="/schedule" replace />} />

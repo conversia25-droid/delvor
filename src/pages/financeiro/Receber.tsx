@@ -8,8 +8,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   HandCoins, Loader2, AlertTriangle, CalendarClock, CheckCircle2, Undo2, Search, Zap, Wallet,
-  MoreHorizontal, Paperclip, FileText, Copy, Send, MessageCircle, Receipt,
+  MoreHorizontal, Paperclip, FileText, Copy, Send, MessageCircle, Receipt, History,
 } from "lucide-react";
+import { HistoryDialog, ReasonDialog, type ReasonRequest } from "@/components/finance/Dialogs";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -35,7 +36,7 @@ import {
 } from "@/lib/receivables";
 import {
   boletoMessage, fetchAccountBalances, formatBoletoLine, markBoletoSent, registerBoletoIssue,
-  revertBoletoIssue, uploadAttachment, type AccountBalance,
+  registerPartialReceipt, revertBoletoIssue, uploadAttachment, type AccountBalance,
 } from "@/lib/finance";
 
 /* ---------- helpers ---------- */
@@ -190,8 +191,18 @@ export default function Receber() {
   const [issueFile, setIssueFile] = useState<File | null>(null);
   const [issueDone, setIssueDone] = useState<{ row: Receivable; message: string } | null>(null);
 
-  // anexos
+  // anexos, motivo, histórico
   const [attachRow, setAttachRow] = useState<Receivable | null>(null);
+  const [reasonReq, setReasonReq] = useState<ReasonRequest | null>(null);
+  const [historyRow, setHistoryRow] = useState<Receivable | null>(null);
+  // baixa com valor menor: taxa/desconto ou pagamento parcial
+  const [shortMode, setShortMode] = useState<"taxa" | "parcial">("parcial");
+
+  // emissão em lote (carnê)
+  const [issueSel, setIssueSel] = useState<Set<string>>(new Set());
+  const [batchRows, setBatchRows] = useState<{ row: Receivable; due: string; line: string }[] | null>(null);
+  const [batchBank, setBatchBank] = useState("");
+  const [batchFile, setBatchFile] = useState<File | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -285,6 +296,8 @@ export default function Receber() {
   const baixaRows = useMemo(() => (baixaIds ? rows.filter((r) => baixaIds.includes(r.id)) : []), [baixaIds, rows]);
   const baixaGross = baixaRows.reduce((s, r) => s + r.amount, 0);
   const diff = Math.round((received - baixaGross) * 100) / 100;
+  const canPartial = baixaRows.length === 1 && diff < -0.004 && received > 0;
+  const isPartial = canPartial && shortMode === "parcial";
 
   async function openBaixa(ids: string[]) {
     const list = rows.filter((r) => ids.includes(r.id));
@@ -293,6 +306,8 @@ export default function Receber() {
     setReceived(list.reduce((s, r) => s + r.amount, 0));
     setNote("");
     setProof(null);
+    // valor menor que o bruto: cartão costuma ser taxa; o resto, pagamento parcial
+    setShortMode(list.every((r) => r.method === "cartao_credito") ? "taxa" : "parcial");
     // sugere a conta padrão da forma (ex.: pix → banco do pix)
     const m = list[0]?.method;
     setAccountId(accounts.find((a) => m && a.default_methods.includes(m))?.id || "");
@@ -303,6 +318,21 @@ export default function Receber() {
     if (!baixaIds) return;
     if (received <= 0) { toast({ title: "Informe o valor recebido", variant: "destructive" }); return; }
     setSaving(true);
+
+    // pagamento parcial: baixa o que entrou e o resto continua em aberto
+    if (isPartial) {
+      const r = await registerPartialReceipt({ id: baixaIds[0], amount: received, paidOn, accountId: accountId || null, notes: note });
+      if (r.error) { setSaving(false); toast({ title: "Não foi possível registrar o parcial", description: r.error, variant: "destructive" }); return; }
+      if (proof && user?.company_id) {
+        const up = await uploadAttachment({ companyId: user.company_id, entity: "sale_payment", entityId: baixaIds[0], kind: "comprovante", file: proof });
+        if (up.error) toast({ title: "Comprovante não anexado", description: up.error, variant: "destructive" });
+      }
+      setSaving(false);
+      toast({ title: "Pagamento parcial registrado", description: `${formatBRL(received)} recebido; ${formatBRL(baixaGross - received)} continua em aberto.` });
+      setBaixaIds(null); setSelected(new Set()); load();
+      return;
+    }
+
     const { result, error } = await registerReceipts({
       ids: baixaIds, paidOn,
       receivedTotal: Math.abs(diff) < 0.005 ? null : received,
@@ -331,15 +361,20 @@ export default function Receber() {
     load();
   }
 
-  async function undo(r: Receivable) {
-    const ok = window.confirm(
-      `Desfazer a baixa de ${formatBRL(r.received_amount ?? r.amount)} (${r.customer_name || "cliente"}, venda ${saleNo(r.sale_number)})?\n\nO pagamento volta para Em aberto.`,
-    );
-    if (!ok) return;
-    const { error } = await revertReceipt(r.id);
-    if (error) { toast({ title: "Não foi possível desfazer", description: error, variant: "destructive" }); return; }
-    toast({ title: "Baixa desfeita", description: "O pagamento voltou para Em aberto." });
-    load();
+  function undo(r: Receivable) {
+    setReasonReq({
+      title: "Desfazer baixa",
+      description: `${formatBRL(r.received_amount ?? r.amount)} · ${r.customer_name || "cliente"} · venda ${saleNo(r.sale_number)}. O pagamento volta para Em aberto e sai do recebido.`,
+      confirmLabel: "Desfazer baixa",
+      destructive: true,
+      onConfirm: async (reason) => {
+        const { error } = await revertReceipt(r.id, reason);
+        if (error) return error;
+        toast({ title: "Baixa desfeita", description: "O pagamento voltou para Em aberto." });
+        load();
+        return null;
+      },
+    });
   }
 
   /* ---------- emissão do boleto ---------- */
@@ -402,10 +437,55 @@ export default function Receber() {
     toast({ title: "Marcado como enviado ao cliente" });
     load();
   }
-  async function undoIssue(r: Receivable) {
-    if (!window.confirm("Desfazer a emissão? O boleto volta para 'A emitir' e a linha digitável é apagada (os anexos continuam).")) return;
-    const { error } = await revertBoletoIssue(r.id);
-    if (error) { toast({ title: "Não foi possível desfazer", description: error, variant: "destructive" }); return; }
+  function undoIssue(r: Receivable) {
+    setReasonReq({
+      title: "Desfazer emissão do boleto",
+      description: "O boleto volta para 'A emitir' e a linha digitável é apagada. Os anexos continuam.",
+      confirmLabel: "Desfazer emissão",
+      required: false,
+      placeholder: "Ex.: boleto gerado com valor errado",
+      onConfirm: async (reason) => {
+        const { error } = await revertBoletoIssue(r.id, reason || null);
+        if (error) return error;
+        load();
+        return null;
+      },
+    });
+  }
+
+  /* ---------- emissão em lote (carnê) ---------- */
+  function openBatchIssue() {
+    const list = rows.filter((r) => issueSel.has(r.id)).sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""));
+    setBatchRows(list.map((r) => ({ row: r, due: r.due_date || addDaysISO(7), line: "" })));
+    setBatchBank("");
+    setBatchFile(null);
+  }
+  async function confirmBatchIssue() {
+    if (!batchRows) return;
+    const bad = batchRows.find((b) => { const d = b.line.replace(/\D/g, "").length; return d > 0 && d !== 47 && d !== 48; });
+    if (bad) { toast({ title: "Linha digitável incompleta", description: `Parcela de ${fmtDate(bad.due)}: confira os 47 dígitos.`, variant: "destructive" }); return; }
+    if (!batchFile && batchRows.some((b) => !b.line.replace(/\D/g, ""))) {
+      toast({ title: "Informe a linha de cada boleto ou anexe o PDF do carnê", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    let okCount = 0;
+    const errors: string[] = [];
+    for (const b of batchRows) {
+      const { error } = await registerBoletoIssue({ id: b.row.id, dueDate: b.due, line: b.line, bank: batchBank });
+      if (error) { errors.push(`${fmtDate(b.due)}: ${error}`); continue; }
+      okCount++;
+      if (batchFile && user?.company_id) {
+        const up = await uploadAttachment({ companyId: user.company_id, entity: "sale_payment", entityId: b.row.id, kind: "boleto", file: batchFile });
+        if (up.error) errors.push(`${fmtDate(b.due)}: PDF não anexado (${up.error})`);
+      }
+    }
+    setSaving(false);
+    toast(errors.length
+      ? { title: `${okCount} de ${batchRows.length} registrados`, description: errors.join(" · "), variant: "destructive" }
+      : { title: `${okCount} boletos emitidos`, description: "Carnê registrado. Mande pro cliente pelo menu de cada parcela." });
+    setBatchRows(null);
+    setIssueSel(new Set());
     load();
   }
 
@@ -429,6 +509,9 @@ export default function Receber() {
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuItem onClick={() => setAttachRow(r)}>
             <Paperclip className="mr-2 h-4 w-4" /> Anexos{r.attachments_count ? ` (${r.attachments_count})` : ""}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setHistoryRow(r)}>
+            <History className="mr-2 h-4 w-4" /> Histórico
           </DropdownMenuItem>
           <DropdownMenuItem asChild>
             <Link to={`/sales/${r.sale_id}`}><Receipt className="mr-2 h-4 w-4" /> Abrir venda</Link>
@@ -589,6 +672,16 @@ export default function Receber() {
         </div>
       )}
 
+      {tab === "emitir" && issueSel.size > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-[10px] border border-primary/40 bg-accent/40 px-4 py-2.5 text-sm">
+          <span><strong>{issueSel.size}</strong> boleto{issueSel.size > 1 ? "s" : ""} · <strong className="num">{formatBRL(toIssueRows.filter((r) => issueSel.has(r.id)).reduce((s, r) => s + r.amount, 0))}</strong></span>
+          <Button size="sm" className="ml-auto" onClick={openBatchIssue}>
+            <FileText className="mr-1.5 h-4 w-4" /> Registrar emissão em lote
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setIssueSel(new Set())}>Limpar</Button>
+        </div>
+      )}
+
       {/* Tabelas */}
       <div className="overflow-x-auto rounded-[10px] border bg-card">
         {loading ? (
@@ -609,6 +702,13 @@ export default function Receber() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={toIssueRows.length > 0 && toIssueRows.every((r) => issueSel.has(r.id))}
+                      onCheckedChange={(v) => setIssueSel(v ? new Set(toIssueRows.map((r) => r.id)) : new Set())}
+                      aria-label="Selecionar todos"
+                    />
+                  </TableHead>
                   <TableHead>Vendido em</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead>Venda</TableHead>
@@ -622,6 +722,13 @@ export default function Receber() {
                   const age = daysSince(r.created_at);
                   return (
                     <TableRow key={r.id} className={age >= 1 ? "bg-red-500/[0.04]" : ""}>
+                      <TableCell>
+                        <Checkbox
+                          checked={issueSel.has(r.id)}
+                          onCheckedChange={(v) => setIssueSel((prev) => { const n = new Set(prev); if (v) n.add(r.id); else n.delete(r.id); return n; })}
+                          aria-label="Selecionar"
+                        />
+                      </TableCell>
                       <TableCell>
                         <div className="num">{fmtDateTime(r.created_at || null)}</div>
                         {age >= 1
@@ -916,7 +1023,19 @@ export default function Receber() {
                 <MoneyInput value={received} onChange={setReceived} className="text-right" />
               </div>
             </div>
-            {diff < -0.004 && (
+            {canPartial && (
+              <div className="space-y-1.5 rounded-md border px-3 py-2.5 text-sm">
+                <label className="flex cursor-pointer items-start gap-2">
+                  <input type="radio" name="short-mode" className="mt-1" checked={shortMode === "parcial"} onChange={() => setShortMode("parcial")} />
+                  <span>Pagamento parcial: <strong className="num">{formatBRL(baixaGross - received)}</strong> continua em aberto, mesmo vencimento</span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-2">
+                  <input type="radio" name="short-mode" className="mt-1" checked={shortMode === "taxa"} onChange={() => setShortMode("taxa")} />
+                  <span>A diferença é taxa ou desconto (quita o pagamento)</span>
+                </label>
+              </div>
+            )}
+            {diff < -0.004 && !isPartial && (
               <p className="text-xs text-red-700 dark:text-red-400">
                 Taxa / desconto: {formatBRL(-diff)} ({((-diff / baixaGross) * 100).toFixed(2).replace(".", ",")}%)
                 {baixaRows.some((r) => r.method === "cartao_credito") ? ". Se for antecipação, fica marcado como antecipado." : ""}
@@ -974,6 +1093,52 @@ export default function Receber() {
         entityId={attachRow?.id || null}
         defaultKind={attachRow?.status === "pago" ? "comprovante" : attachRow?.method === "boleto" ? "boleto" : "outro"}
         onChanged={load}
+      />
+
+      {/* Diálogo: emissão em lote (carnê) */}
+      <Dialog open={!!batchRows} onOpenChange={(o) => { if (!o) setBatchRows(null); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Registrar emissão de {batchRows?.length} boletos</DialogTitle>
+            <DialogDescription>
+              Confira o vencimento e cole a linha de cada parcela. Se o banco gerou um PDF único do carnê, anexe aqui: ele vai em todas.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[45vh] space-y-2 overflow-y-auto pr-1">
+            {batchRows?.map((b, i) => (
+              <div key={b.row.id} className="grid grid-cols-[auto_8.5rem_1fr] items-center gap-2 rounded-md border px-2.5 py-2">
+                <div className="w-28 text-xs">
+                  <div className="font-medium">{b.row.customer_name || "—"}</div>
+                  <div className="num text-muted-foreground">{saleNo(b.row.sale_number)} · {formatBRL(b.row.amount)}</div>
+                </div>
+                <Input type="date" value={b.due} className="h-8 text-sm" aria-label="Vencimento"
+                  onChange={(e) => setBatchRows((prev) => prev && prev.map((x, j) => (j === i ? { ...x, due: e.target.value } : x)))} />
+                <Input value={b.line} className="h-8 font-mono text-xs" placeholder="Linha digitável (opcional com PDF)" aria-label="Linha digitável"
+                  onChange={(e) => setBatchRows((prev) => prev && prev.map((x, j) => (j === i ? { ...x, line: formatBoletoLine(e.target.value) } : x)))} />
+              </div>
+            ))}
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="batch-bank" className="text-xs">Banco <span className="text-muted-foreground">(opcional)</span></Label>
+              <Input id="batch-bank" value={batchBank} onChange={(e) => setBatchBank(e.target.value)} placeholder="Ex.: Sicoob" />
+            </div>
+            <AttachFileField id="batch-pdf" file={batchFile} onChange={setBatchFile} label="PDF do carnê" />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBatchRows(null)}>Cancelar</Button>
+            <Button onClick={confirmBatchIssue} disabled={saving}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
+              Registrar {batchRows?.length} emissões
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ReasonDialog request={reasonReq} onClose={() => setReasonReq(null)} />
+      <HistoryDialog
+        target={historyRow ? { entity: "sale_payment", id: historyRow.id, title: `${historyRow.customer_name || "Cliente"} · venda ${saleNo(historyRow.sale_number)} · ${formatBRL(historyRow.amount)}` } : null}
+        onClose={() => setHistoryRow(null)}
       />
     </div>
   );

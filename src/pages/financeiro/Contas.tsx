@@ -224,7 +224,7 @@ function ContasInner() {
                       <TableRow key={`${l.ref_id}-${i}`}>
                         <TableCell className="num">{fmtDate(l.moved_on)}</TableCell>
                         <TableCell>{l.description}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{l.kind === "recebimento" ? "Recebimento" : l.kind === "pagamento" ? "Pagamento" : "Transferência"}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{l.kind === "recebimento" ? "Recebimento" : l.kind === "pagamento" ? "Pagamento" : l.kind === "movimento" ? "Empréstimo / ajuste" : "Transferência"}</TableCell>
                         <TableCell className={`num text-right font-medium ${l.amount < 0 ? "text-red-700 dark:text-red-400" : "text-emerald-700 dark:text-emerald-400"}`}>
                           {l.amount < 0 ? "−" : "+"}{formatBRL(Math.abs(l.amount))}
                         </TableCell>

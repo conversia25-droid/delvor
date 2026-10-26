@@ -19,7 +19,7 @@ import {
 import CustomerCombobox from "@/components/sales/CustomerCombobox";
 import { formatBRL } from "@/lib/formatters";
 import { getOpenSession, openSession, type CashSession } from "@/lib/cashRegister";
-import { addDaysISO, DEFAULT_DUE_DAYS, isPendingMethod, localISODate } from "@/lib/receivables";
+import { addDaysISO, DEFAULT_DUE_DAYS, isPendingMethod, localISODate, splitInstallments } from "@/lib/receivables";
 
 /* ====================================================================
    TIPOS
@@ -55,6 +55,8 @@ interface Payment {
   amount: number;
   /** Só nas formas pendentes (boleto, crediário, transferência, cartão crédito). */
   due_date?: string;
+  /** Boleto/crediário em N vezes: vira N pagamentos mensais a partir do vencimento. */
+  installments?: number;
 }
 
 const PAY_LABELS: Record<PayMethod, string> = {
@@ -297,6 +299,7 @@ export default function QuickSaleTab({ onSold }: Props) {
         next.due_date = isPendingMethod(patch.method)
           ? addDaysISO(DEFAULT_DUE_DAYS[patch.method])
           : undefined;
+        if (!isPendingMethod(patch.method)) next.installments = undefined;
       }
       return next;
     }));
@@ -386,25 +389,27 @@ export default function QuickSaleTab({ onSold }: Props) {
       //    À vista (dinheiro, pix, débito, outro): pago agora, entra neste caixa.
       //    Boleto, crediário, transferência e cartão crédito: pendente até a baixa
       //    em Contas a receber — não entra no caixa nem no Recebido antes disso.
+      //    Parcelado (N > 1): uma linha por parcela, todo mês no mesmo dia.
       const paysPayload = payments
         .filter((p) => p.amount > 0)
-        .map((p) =>
+        .flatMap<Record<string, unknown>>((p) =>
           isPendingMethod(p.method)
-            ? {
+            ? splitInstallments(p.amount, p.installments || 1, p.due_date!).map((x) => ({
                 sale_id: saleId,
                 method: p.method,
                 status: "pendente",
-                amount: p.amount,
-                due_date: p.due_date,
-              }
-            : {
+                amount: x.amount,
+                due_date: x.due_date,
+                notes: x.label || null,
+              }))
+            : [{
                 sale_id: saleId,
                 method: p.method,
                 status: "pago",
                 amount: p.amount,
                 paid_at: new Date().toISOString(),
                 cash_session_id: session.id,
-              },
+              }],
         );
       if (paysPayload.length) {
         const { error: payErr } = await supabase.from("sale_payments" as any).insert(paysPayload as any);
@@ -745,7 +750,24 @@ export default function QuickSaleTab({ onSold }: Props) {
                           onChange={(e) => updatePayment(p.id, { due_date: e.target.value })}
                           className="h-7 w-36 text-xs"
                         />
+                        {p.method !== "transferencia" && (
+                          <select
+                            value={p.installments || 1}
+                            onChange={(e) => updatePayment(p.id, { installments: Number(e.target.value) })}
+                            className="h-7 rounded-md border bg-background px-1.5 text-xs"
+                            aria-label="Parcelas"
+                          >
+                            {Array.from({ length: 24 }, (_, i) => i + 1).map((n) => (
+                              <option key={n} value={n}>{n === 1 ? "à vista" : `${n}x`}</option>
+                            ))}
+                          </select>
+                        )}
                         <span className="text-amber-700/90 dark:text-amber-400/90">fica a receber</span>
+                      </div>
+                    )}
+                    {isPendingMethod(p.method) && (p.installments || 1) > 1 && p.amount > 0 && (
+                      <div className="pl-1 text-[11px] text-muted-foreground">
+                        {p.installments}× de {formatBRL(splitInstallments(p.amount, p.installments!, p.due_date || localISODate())[0].amount)}, todo mês a partir do vencimento
                       </div>
                     )}
                   </div>

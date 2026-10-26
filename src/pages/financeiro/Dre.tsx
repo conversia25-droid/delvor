@@ -59,29 +59,35 @@ function DreInner() {
     const cats = [...new Set(lines.filter((l) => l.line === "despesa").map((l) => l.label))].sort();
     const col = (m: string) => {
       const receita = get("receita", m), cmv = get("cmv", m), comissao = get("comissao", m), taxa = get("taxa", m), despesa = get("despesa", m);
+      const juros = get("juros_emprestimo", m), encargos = get("encargos", m), descontos = get("descontos", m), recFin = get("receita_financeira", m);
       const bruto = receita - cmv;
-      const resultado = bruto - comissao - taxa - despesa;
-      return { receita, cmv, bruto, comissao, taxa, despesa, resultado };
+      const operacional = bruto - comissao - taxa - despesa;
+      const resultado = operacional - juros - encargos + descontos + recFin;
+      return { receita, cmv, bruto, comissao, taxa, despesa, operacional, juros, encargos, descontos, recFin, resultado };
     };
     const byMonth = Object.fromEntries(months.map((m) => [m, col(m)]));
-    const sum = (k: keyof ReturnType<typeof col>) => months.reduce((s, m) => s + byMonth[m][k], 0);
-    const total = { receita: sum("receita"), cmv: sum("cmv"), bruto: sum("bruto"), comissao: sum("comissao"), taxa: sum("taxa"), despesa: sum("despesa"), resultado: sum("resultado") };
+    type K = keyof ReturnType<typeof col>;
+    const sum = (k: K) => months.reduce((s, m) => s + byMonth[m][k], 0);
+    const keys: K[] = ["receita", "cmv", "bruto", "comissao", "taxa", "despesa", "operacional", "juros", "encargos", "descontos", "recFin", "resultado"];
+    const total = Object.fromEntries(keys.map((k) => [k, sum(k)])) as Record<K, number>;
+    const hasFin = ["juros", "encargos", "descontos", "recFin"].some((k) => Math.abs(total[k as K]) >= 0.005);
     const catVal = (c: string, m?: string) => lines.filter((l) => l.line === "despesa" && l.label === c && (!m || l.month === m)).reduce((s, l) => s + l.amount, 0);
-    return { byMonth, total, cats, catVal };
+    return { byMonth, total, cats, catVal, hasFin };
   }, [lines, months]);
 
   const label = (m: string) => `${MES[Number(m.slice(5, 7)) - 1]}/${m.slice(2, 4)}`;
   const pct = (a: number, b: number) => (b ? `${((a / b) * 100).toFixed(1).replace(".", ",")}%` : "—");
   const chart = months.map((m) => ({ key: m, label: label(m), v: t.byMonth[m]?.resultado || 0 }));
 
-  const Row = ({ name, k, sign = "", strong = false, muted = false }: { name: string; k: "receita" | "cmv" | "bruto" | "comissao" | "taxa" | "despesa" | "resultado"; sign?: string; strong?: boolean; muted?: boolean }) => (
+  const SUBTOTAL = new Set(["resultado", "bruto", "operacional"]);
+  const Row = ({ name, k, sign = "", strong = false, muted = false }: { name: string; k: keyof typeof t.total; sign?: string; strong?: boolean; muted?: boolean }) => (
     <TableRow className={strong ? "bg-muted/40 font-semibold" : ""}>
       <TableCell className={`whitespace-nowrap ${muted ? "text-muted-foreground" : ""}`}>{sign && <span className="mr-1 text-muted-foreground">{sign}</span>}{name}</TableCell>
       {months.map((m) => {
         const v = t.byMonth[m][k];
-        return <TableCell key={m} className={`num whitespace-nowrap text-right ${(k === "resultado" || k === "bruto") && v < 0 ? "text-red-700 dark:text-red-400" : ""}`}>{formatBRL(v)}</TableCell>;
+        return <TableCell key={m} className={`num whitespace-nowrap text-right ${SUBTOTAL.has(k) && v < 0 ? "text-red-700 dark:text-red-400" : ""}`}>{formatBRL(v)}</TableCell>;
       })}
-      <TableCell className={`num whitespace-nowrap text-right font-semibold ${(k === "resultado" || k === "bruto") && t.total[k] < 0 ? "text-red-700 dark:text-red-400" : ""}`}>{formatBRL(t.total[k])}</TableCell>
+      <TableCell className={`num whitespace-nowrap text-right font-semibold ${SUBTOTAL.has(k) && t.total[k] < 0 ? "text-red-700 dark:text-red-400" : ""}`}>{formatBRL(t.total[k])}</TableCell>
     </TableRow>
   );
 
@@ -197,6 +203,15 @@ function DreInner() {
                     </TableRow>
                   </Fragment>
                 ))}
+                {t.hasFin && (
+                  <>
+                    <Row name="Resultado operacional" k="operacional" sign="=" strong />
+                    {Math.abs(t.total.juros) >= 0.005 && <Row name="Juros de empréstimos" k="juros" sign="−" muted />}
+                    {Math.abs(t.total.encargos) >= 0.005 && <Row name="Juros e multas pagos" k="encargos" sign="−" muted />}
+                    {Math.abs(t.total.descontos) >= 0.005 && <Row name="Descontos obtidos" k="descontos" sign="+" muted />}
+                    {Math.abs(t.total.recFin) >= 0.005 && <Row name="Juros e multas recebidos" k="recFin" sign="+" muted />}
+                  </>
+                )}
                 <Row name="Resultado" k="resultado" sign="=" strong />
                 <TableRow>
                   <TableCell className="text-xs text-muted-foreground">margem líquida</TableCell>
@@ -211,6 +226,7 @@ function DreInner() {
             <li>* mês atual, ainda parcial.</li>
             <li>Custo das mercadorias usa o custo de cada produto cadastrado hoje (o sistema não guarda o custo da época da venda). Serviços entram sem custo.</li>
             <li>Despesas: contas a pagar no mês do vencimento, despesas variáveis no mês do pagamento, fixas pelo mês de referência.</li>
+            <li>Empréstimos: só os juros de cada parcela entram como despesa; a amortização reduz a dívida e não é despesa. Juros, multas e descontos de pagamentos caem no mês em que foram pagos.</li>
           </ul>
         </>
       )}

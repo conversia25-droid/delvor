@@ -35,6 +35,7 @@ import {
   ReceiptText,
   Landmark,
   FileBarChart,
+  Lock,
   TrendingUp,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -85,6 +86,7 @@ const navigation = [
   { name: "Fluxo de caixa",  href: "/financeiro/fluxo",  group: "Financeiro", icon: TrendingUp,   addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
   { name: "Contas e saldos", href: "/financeiro/contas", group: "Financeiro", icon: Landmark,     addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
   { name: "DRE",             href: "/financeiro/dre",    group: "Financeiro", icon: FileBarChart, addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
+  { name: "Fechamento",      href: "/financeiro/fechamento", group: "Financeiro", icon: Lock, roles: ["admin", "gerente", "financeiro"] },
   { name: "Despesas fixas", href: "/financeiro/fixas",      group: "Financeiro", icon: CalendarClock, addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
   { name: "Despesas variáveis", href: "/financeiro/variaveis", group: "Financeiro", icon: Receipt,      addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },
   { name: "Categorias fin.",href: "/financeiro/categorias", group: "Financeiro", icon: Tags,          addonCode: "financeiro", roles: ["admin", "gerente", "financeiro"] },

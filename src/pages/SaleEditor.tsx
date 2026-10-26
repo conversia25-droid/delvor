@@ -21,6 +21,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
+import { splitInstallments } from "@/lib/receivables";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -406,7 +407,8 @@ export default function SaleEditor() {
     d.setDate(d.getDate() + 30);
     return d.toISOString().slice(0, 10);
   });
-  const [installInterval, setInstallInterval] = useState(30);
+  // 0 = mensal no mesmo dia (boleto/carnê); senão, a cada X dias
+  const [installInterval, setInstallInterval] = useState(0);
 
   const remainingForInstall = useMemo(
     () => Math.max(0, total - payments.reduce((s, p) => s + p.amount, 0)),
@@ -423,26 +425,18 @@ export default function SaleEditor() {
       return;
     }
     // Divide o valor; última parcela absorve o resto do arredondamento
-    const per = Math.round((remainingForInstall / installCount) * 100) / 100;
-    const last = +(remainingForInstall - per * (installCount - 1)).toFixed(2);
-    const base = new Date(installFirstDate + "T12:00");
-
-    const novas: PaymentDraft[] = [];
-    for (let i = 0; i < installCount; i++) {
-      const due = new Date(base);
-      due.setDate(due.getDate() + i * installInterval);
-      novas.push({
-        method: installMethod,
-        status: "pendente",
-        amount: i === installCount - 1 ? last : per,
-        due_date: due.toISOString().slice(0, 10),
-        paid_at: null,
-        notes: `Parcela ${i + 1}/${installCount}`,
-      });
-    }
+    const parts = splitInstallments(remainingForInstall, installCount, installFirstDate, installInterval);
+    const novas: PaymentDraft[] = parts.map((x) => ({
+      method: installMethod,
+      status: "pendente",
+      amount: x.amount,
+      due_date: x.due_date,
+      paid_at: null,
+      notes: x.label || null,
+    }));
     setPayments((arr) => [...arr, ...novas]);
     setInstallDialogOpen(false);
-    toast({ title: `${installCount} parcelas adicionadas`, description: `R$ ${per.toFixed(2).replace(".", ",")} cada` });
+    toast({ title: `${installCount} parcelas adicionadas`, description: `R$ ${parts[0].amount.toFixed(2).replace(".", ",")} cada` });
   }
 
   /* =========================================================
@@ -934,10 +928,15 @@ export default function SaleEditor() {
               <div className="py-4 text-center space-y-3">
                 <p className="text-sm text-muted-foreground">Nenhum pagamento cadastrado.</p>
                 {editable && (
-                  <Button id="sale-addparcel-btn" size="sm" onClick={addPayment}>
-                    <Plus className="h-3.5 w-3.5 mr-1.5" /> Adicionar pagamento
-                    <kbd className="ml-2 text-[10px] font-mono bg-white/15 rounded px-1.5 py-0.5">F3</kbd>
-                  </Button>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Button id="sale-addparcel-btn" size="sm" onClick={addPayment}>
+                      <Plus className="h-3.5 w-3.5 mr-1.5" /> Adicionar pagamento
+                      <kbd className="ml-2 text-[10px] font-mono bg-white/15 rounded px-1.5 py-0.5">F3</kbd>
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => { setInstallMethod("boleto"); setInstallDialogOpen(true); }}>
+                      <CreditCard className="h-3.5 w-3.5 mr-1.5" /> Parcelar (boleto, carnê, cartão)
+                    </Button>
+                  </div>
                 )}
               </div>
             )}
@@ -1147,15 +1146,14 @@ export default function SaleEditor() {
                 <Input type="date" className="h-9" value={installFirstDate} onChange={(e) => setInstallFirstDate(e.target.value)} />
               </div>
               <div>
-                <Label className="text-xs">Intervalo entre parcelas (dias)</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={365}
-                  className="h-9"
-                  value={installInterval}
-                  onChange={(e) => setInstallInterval(Math.max(1, Math.min(365, Number(e.target.value) || 30)))}
-                />
+                <Label className="text-xs">Intervalo</Label>
+                <Select value={String(installInterval)} onValueChange={(v) => setInstallInterval(Number(v))}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">Todo mês, mesmo dia</SelectItem>
+                    {[7, 10, 14, 15, 21, 28, 30, 45, 60].map((d) => <SelectItem key={d} value={String(d)}>A cada {d} dias</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -1164,8 +1162,8 @@ export default function SaleEditor() {
               {remainingForInstall > 0 ? (
                 <div className="text-muted-foreground text-xs mt-0.5">
                   {installCount}× de <span className="font-mono text-foreground">
-                    R$ {(remainingForInstall / installCount).toFixed(2).replace(".", ",")}
-                  </span> · primeira em <span className="text-foreground">{installFirstDate.split("-").reverse().join("/")}</span> · cada {installInterval} dias
+                    R$ {splitInstallments(remainingForInstall, installCount, installFirstDate, installInterval)[0].amount.toFixed(2).replace(".", ",")}
+                  </span> · primeira em <span className="text-foreground">{installFirstDate.split("-").reverse().join("/")}</span> · {installInterval ? `a cada ${installInterval} dias` : "todo mês"}
                 </div>
               ) : (
                 <div className="text-rose-700 dark:text-rose-400 text-xs mt-0.5">Não há valor restante (todas as parcelas já cobrem o total).</div>

@@ -47,6 +47,30 @@ export function addDaysISO(days: number, from: Date = new Date()): string {
   return localISODate(d);
 }
 
+/** Soma meses mantendo o dia (31/01 + 1 mês = 28 ou 29/02). */
+export function addMonthsISO(iso: string, months: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const last = new Date(y, m - 1 + months + 1, 0).getDate();
+  return localISODate(new Date(y, m - 1 + months, Math.min(d, last)));
+}
+
+/**
+ * Divide um valor em N parcelas (centavos de sobra na última).
+ * intervalDays = 0 → mensal no mesmo dia; senão, a cada X dias.
+ */
+export function splitInstallments(total: number, n: number, firstDue: string, intervalDays = 0): { amount: number; due_date: string; label: string }[] {
+  const cents = Math.round(total * 100);
+  const count = Math.max(1, Math.floor(n));
+  const per = Math.floor(cents / count);
+  return Array.from({ length: count }, (_, i) => {
+    const due = intervalDays > 0
+      ? (() => { const [y, m, d] = firstDue.split("-").map(Number); return localISODate(new Date(y, m - 1, d + i * intervalDays)); })()
+      : addMonthsISO(firstDue, i);
+    const amount = (i === count - 1 ? cents - per * (count - 1) : per) / 100;
+    return { amount, due_date: due, label: count > 1 ? `Parcela ${i + 1}/${count}` : "" };
+  });
+}
+
 /** Dias entre hoje e o vencimento (negativo = vencido). */
 export function daysUntil(dueISO: string): number {
   const [y, m, d] = dueISO.split("-").map(Number);
@@ -198,8 +222,14 @@ export async function registerReceipts(opts: {
   };
 }
 
-export async function revertReceipt(id: string): Promise<{ error: string | null }> {
-  const { error } = await supabase.rpc("revert_payment_receipt" as any, { p_id: id });
+/** Desfaz a baixa. O motivo vai pro histórico (migration 62); banco antigo ignora. */
+export async function revertReceipt(id: string, reason?: string | null): Promise<{ error: string | null }> {
+  const args: Record<string, unknown> = { p_id: id };
+  if (reason) args.p_reason = reason;
+  let { error } = await supabase.rpc("revert_payment_receipt" as any, args);
+  if (error && reason && /p_reason|could not find the function/i.test(error.message)) {
+    ({ error } = await supabase.rpc("revert_payment_receipt" as any, { p_id: id }));
+  }
   if (error) return { error: error.message };
   notifyReceivablesChanged();
   return { error: null };
