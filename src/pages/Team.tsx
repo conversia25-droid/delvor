@@ -11,6 +11,8 @@ import {
   RefreshCw,
   Percent,
   Crown,
+  UserMinus,
+  UserCheck,
 } from "lucide-react";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -45,6 +47,16 @@ import {
 } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -70,6 +82,8 @@ type TeamMember = {
   /** Lista de papéis — um usuário pode ser tecnico+vendedor, por exemplo. */
   roles: AppRole[];
   commission_rate: number;
+  /** false = removido da equipe (sem papéis, sem acesso). Migration 69. */
+  active: boolean;
 };
 
 const ROLE_INFO: Record<AppRole, { label: string; description: string; icon: any; tone: string }> = {
@@ -90,6 +104,8 @@ export default function Team() {
   const [loading, setLoading] = useState(true);
   const [changingRole, setChangingRole] = useState<string | null>(null);
   const [savingComm, setSavingComm] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<TeamMember | null>(null);
+  const [busyMember, setBusyMember] = useState<string | null>(null);
 
   // Dialog de criar
   const [open, setOpen] = useState(false);
@@ -113,7 +129,7 @@ export default function Team() {
 
     const { data: profiles, error } = await supabase
       .from("profiles")
-      .select("id, nome, email, commission_rate")
+      .select("id, nome, email, commission_rate, active")
       .eq("company_id", companyId)
       .order("nome");
 
@@ -151,6 +167,7 @@ export default function Team() {
       email: p.email,
       roles: sortRoles(rolesByUser.get(p.id) || ["user"]),
       commission_rate: Number(p.commission_rate) || 0,
+      active: p.active !== false,
     })));
     setLoading(false);
   }
@@ -287,12 +304,46 @@ export default function Team() {
     toast({ title: "Papéis alterados", description: `${member.nome}: ${labels}` });
   }
 
+  /** Remove da equipe: tira os papéis e bloqueia o acesso. Vendas/OS antigas mantêm o nome. */
+  async function removeMember(member: TeamMember) {
+    setBusyMember(member.id);
+    const { error } = await supabase.rpc("remove_team_member" as any, { p_user_id: member.id });
+    setBusyMember(null);
+    if (error) {
+      const missing = /remove_team_member|could not find the function/i.test(error.message);
+      toast({
+        title: "Não foi possível remover",
+        description: missing ? "Aplique a atualização do banco (migration 69) para remover membros." : error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+    setRemoving(null);
+    toast({ title: `${member.nome} removido da equipe`, description: "O acesso foi bloqueado. O histórico continua com o nome dele." });
+    load();
+  }
+
+  async function reactivateMember(member: TeamMember) {
+    setBusyMember(member.id);
+    const { error } = await supabase.rpc("reactivate_team_member" as any, { p_user_id: member.id });
+    setBusyMember(null);
+    if (error) {
+      toast({ title: "Não foi possível reativar", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: `${member.nome} voltou para a equipe`, description: "Entrou como Vendedor. Ajuste os papéis se precisar." });
+    load();
+  }
+
+  const activeMembers = useMemo(() => members.filter((m) => m.active), [members]);
+  const removedMembers = useMemo(() => members.filter((m) => !m.active), [members]);
+
   const counts = useMemo(() => {
     // Cada role conta separadamente — se um user é tecnico+vendedor, soma em ambos.
     const c: Record<AppRole, number> = { super_admin: 0, admin: 0, gerente: 0, vendedor: 0, tecnico: 0, user: 0 };
-    members.forEach((m) => m.roles.forEach((r) => { c[r] = (c[r] || 0) + 1; }));
+    activeMembers.forEach((m) => m.roles.forEach((r) => { c[r] = (c[r] || 0) + 1; }));
     return c;
-  }, [members]);
+  }, [activeMembers]);
 
   return (
     <div className="space-y-6">
@@ -442,16 +493,17 @@ export default function Team() {
               <TableHead>E-mail</TableHead>
               <TableHead className="w-32">Comissão</TableHead>
               <TableHead className="w-56">Papel</TableHead>
+              {isAdmin && <TableHead className="w-28" />}
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading && (
-              <TableRow><TableCell colSpan={4} className="text-center py-10 text-muted-foreground">Carregando...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={isAdmin ? 5 : 4} className="text-center py-10 text-muted-foreground">Carregando...</TableCell></TableRow>
             )}
-            {!loading && members.length === 0 && (
-              <TableRow><TableCell colSpan={4} className="text-center py-10 text-muted-foreground">Nenhum membro.</TableCell></TableRow>
+            {!loading && activeMembers.length === 0 && (
+              <TableRow><TableCell colSpan={isAdmin ? 5 : 4} className="text-center py-10 text-muted-foreground">Nenhum membro.</TableCell></TableRow>
             )}
-            {!loading && members.map((m) => {
+            {!loading && activeMembers.map((m) => {
               const isMe = m.id === user?.id;
               return (
                 <TableRow key={m.id}>
@@ -491,12 +543,74 @@ export default function Team() {
                       onChange={(rs) => changeRoles(m, rs)}
                     />
                   </TableCell>
+                  {isAdmin && (
+                    <TableCell className="text-right">
+                      {!isMe && !m.roles.includes("super_admin") && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-rose-600 hover:text-rose-700"
+                          disabled={busyMember === m.id}
+                          onClick={() => setRemoving(m)}
+                        >
+                          <UserMinus className="h-4 w-4 mr-1" /> Remover
+                        </Button>
+                      )}
+                    </TableCell>
+                  )}
                 </TableRow>
               );
             })}
           </TableBody>
         </Table>
       </div>
+
+      {!loading && removedMembers.length > 0 && (
+        <div className="rounded-lg border bg-card">
+          <div className="px-4 pt-3 pb-1 text-sm font-semibold">Removidos da equipe</div>
+          <div className="px-4 pb-2 text-xs text-muted-foreground">Sem acesso ao sistema. O nome continua nas vendas e OS antigas.</div>
+          <Table>
+            <TableBody>
+              {removedMembers.map((m) => (
+                <TableRow key={m.id} className="text-muted-foreground">
+                  <TableCell className="font-medium">{m.nome}</TableCell>
+                  <TableCell className="text-sm">{m.email}</TableCell>
+                  <TableCell className="text-right">
+                    {isAdmin && (
+                      <Button variant="ghost" size="sm" disabled={busyMember === m.id} onClick={() => reactivateMember(m)}>
+                        {busyMember === m.id ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <UserCheck className="h-4 w-4 mr-1" />}
+                        Reativar
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      <AlertDialog open={!!removing} onOpenChange={(o) => { if (!o) setRemoving(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover {removing?.nome} da equipe?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Ele perde o acesso ao sistema na hora e sai das listas de vendedor e técnico.
+              Vendas, OS e comissões antigas continuam com o nome dele. Dá para reativar depois.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={!!busyMember}>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+              disabled={!!busyMember}
+              onClick={(e) => { e.preventDefault(); if (removing) removeMember(removing); }}
+            >
+              {busyMember ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null} Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {!isAdmin && (
         <div className="text-xs text-muted-foreground">

@@ -55,6 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           email,
           company_id,
           theme,
+          active,
           companies (
             name
           )
@@ -63,6 +64,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .single();
 
       if (profileError) throw profileError;
+
+      // Removido da equipe (migration 69): encerra a sessão.
+      if ((profile as any)?.active === false) {
+        await supabase.auth.signOut({ scope: 'local' });
+        setUser(null);
+        setSession(null);
+        return;
+      }
 
       // Ramo da empresa em consulta separada e tolerante a falha: se o banco
       // ainda não tem a coluna companies.vertical (migration 47), o login NÃO

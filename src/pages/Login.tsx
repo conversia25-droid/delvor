@@ -80,7 +80,13 @@ const Login = () => {
     setLoading(true);
     const { data, error } = await login(email, password);
     if (!error) {
-      const { data: profile } = await supabase.from("profiles").select("nome").eq("id", data.user?.id).maybeSingle();
+      const { data: profile } = await supabase.from("profiles").select("nome, active").eq("id", data.user?.id).maybeSingle();
+      if ((profile as any)?.active === false) {
+        await supabase.auth.signOut({ scope: "local" });
+        toast({ title: "Acesso desativado", description: "Seu acesso foi removido pelo administrador da empresa.", variant: "destructive" });
+        setLoading(false);
+        return;
+      }
       const profileNome = (profile as any)?.nome;
       toast({ title: profileNome ? `Bem-vindo de volta, ${profileNome}!` : "Login realizado com sucesso", description: profileNome ? "Que bom ter você aqui." : "Bem-vindo de volta!" });
       // Pega TODAS as roles do usuário (não só a primeira) — precisamos saber
