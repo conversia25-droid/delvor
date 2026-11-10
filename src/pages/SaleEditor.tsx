@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -13,6 +13,7 @@ import {
   Loader2,
   CreditCard,
   UserCog,
+  UserPlus,
   CheckCircle2,
   RotateCcw,
   Printer,
@@ -135,7 +136,19 @@ function parseNum(v: string | number): number {
 }
 function fmt(n: number) { return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
+/**
+ * /sales/:id → /sales/new reaproveitaria o mesmo componente (estado da venda
+ * anterior). A chave muda a cada ida para uma rota "/new", forçando editor
+ * limpo; salvar (new → :id) mantém a chave e não recarrega a tela.
+ */
 export default function SaleEditor() {
+  const location = useLocation();
+  const newKey = useRef("");
+  if (/\/new$/.test(location.pathname)) newKey.current = location.key;
+  return <SaleEditorInner key={newKey.current} />;
+}
+
+function SaleEditorInner() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -762,6 +775,20 @@ export default function SaleEditor() {
         </div>
 
         <div className="flex flex-wrap gap-2">
+          {!isNew && (
+            <Button variant="outline" asChild>
+              <Link to="/sales/new">
+                <Plus className="h-4 w-4 mr-1" /> Nova venda
+              </Link>
+            </Button>
+          )}
+          {!isNew && customerId && (
+            <Button variant="outline" asChild title={customer?.name ? `Nova venda para ${customer.name}` : undefined}>
+              <Link to={`/sales/new?customer=${customerId}`}>
+                <UserPlus className="h-4 w-4 mr-1" /> Nova venda p/ este cliente
+              </Link>
+            </Button>
+          )}
           {customer?.remote_jid && (
             <Button variant="outline" asChild>
               <Link to={`/chat?jid=${encodeURIComponent(customer.remote_jid)}`}>
