@@ -182,6 +182,8 @@ export default function SaleEditor() {
   const [actioning, setActioning] = useState<null | "approve" | "invoice" | "cancel" | "deliver">(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
   const [sellerName, setSellerName] = useState<string>("");
 
@@ -382,7 +384,9 @@ export default function SaleEditor() {
   ========================================================= */
   function addPayment() {
     const remaining = Math.max(0, total - payments.reduce((s, p) => s + p.amount, 0));
-    setPayments((arr) => [...arr, { method: "pix", status: "pendente", amount: remaining, due_date: null, paid_at: null, notes: null }]);
+    // Pix cai na hora: já nasce pago.
+    const now = new Date().toISOString();
+    setPayments((arr) => [...arr, { method: "pix", status: "pago", amount: remaining, due_date: now.slice(0, 10), paid_at: now, notes: null }]);
   }
 
   /** Adiciona pagamento com método pré-selecionado a partir dos quick buttons.
@@ -659,6 +663,25 @@ export default function SaleEditor() {
     if (sid) toast({ title: "Venda cancelada" });
   }
 
+  async function handleDelete() {
+    if (!sale?.id) return;
+    setDeleting(true);
+    const { error } = await supabase.rpc("delete_sale" as any, { p_id: sale.id });
+    setDeleting(false);
+    if (error) {
+      const missing = /delete_sale|could not find the function/i.test(error.message);
+      toast({
+        title: "Não foi possível apagar",
+        description: missing ? "Aplique a atualização do banco (migration 66) para apagar vendas." : error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+    setConfirmDelete(false);
+    toast({ title: `Venda #${String(sale.number).padStart(6, "0")} apagada` });
+    navigate(status === "orcamento" ? "/orcamentos" : "/sales");
+  }
+
   /* =========================================================
      PDF
   ========================================================= */
@@ -793,6 +816,11 @@ export default function SaleEditor() {
           {(status === "orcamento" || status === "aprovado") && !isNew && (
             <Button variant="outline" onClick={() => setConfirmCancel(true)} className="text-rose-500 hover:text-rose-600 border-rose-500/30">
               <XCircle className="h-4 w-4 mr-1" /> Cancelar
+            </Button>
+          )}
+          {perms.isManager && !isNew && sale?.id && (
+            <Button variant="ghost" onClick={() => setConfirmDelete(true)} className="text-rose-600 hover:text-rose-700" title="Apagar venda">
+              <Trash2 className="h-4 w-4 mr-1" /> Apagar
             </Button>
           )}
         </div>
@@ -1260,6 +1288,28 @@ export default function SaleEditor() {
           }}
         />
       )}
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apagar {status === "orcamento" ? "orçamento" : "venda"} #{sale ? String(sale.number).padStart(6, "0") : ""}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Some de vez, junto com itens e parcelas em aberto. Se já baixou estoque, as quantidades voltam.
+              Pagamento já recebido impede apagar: desfaça a baixa em Contas a receber antes. Não dá para desfazer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+              disabled={deleting}
+              onClick={(e) => { e.preventDefault(); handleDelete(); }}
+            >
+              {deleting && <Loader2 className="h-4 w-4 animate-spin mr-1" />} Apagar de vez
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={confirmCancel} onOpenChange={setConfirmCancel}>
         <AlertDialogContent>

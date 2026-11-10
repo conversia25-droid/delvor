@@ -359,7 +359,7 @@ export default function Customers() {
         .update(payload)
         .eq("id", form.id);
     } else {
-      resp = await supabase.from("customers" as any).insert(payload);
+      resp = await supabase.from("customers" as any).insert(payload).select("id").single();
     }
 
     setSaving(false);
@@ -373,6 +373,9 @@ export default function Customers() {
     }
     toast({ title: form.id ? "Cliente atualizado" : "Cliente cadastrado" });
     setDialogOpen(false);
+    // Cliente novo: já abre a ficha dele.
+    const newId = !form.id ? (resp.data as any)?.id : null;
+    if (newId) { navigate(`/customers/${newId}`); return; }
     load();
   }
 

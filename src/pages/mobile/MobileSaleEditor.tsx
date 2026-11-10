@@ -927,7 +927,7 @@ function PaymentEditorSheet({
         <div className="p-4 space-y-3">
           <div>
             <Label className="text-xs">Método</Label>
-            <Select value={method} onValueChange={(v: PaymentMethod) => setMethod(v)}>
+            <Select value={method} onValueChange={(v: PaymentMethod) => { setMethod(v); if (v === "pix") setPStatus("pago"); }}>
               <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {PAYMENT_METHODS.map((m) => (

@@ -39,9 +39,9 @@ interface CustomerComboboxProps {
   allowCreate?: boolean;
   /**
    * Formulário usado ao criar um cliente novo:
-   *  - "quick" (default): dialog reduzido — nome, doc, telefone, email.
-   *  - "full": dialog com todos os campos (endereço, IE/IM, observações, etc).
-   * Use "full" em Vendas pra garantir cadastro completo.
+   *  - "full" (default): dialog com todos os campos (endereço, IE/IM, observações, etc).
+   *  - "quick": dialog reduzido — nome, doc, telefone, email.
+   * Padrão é o completo: cadastro de cliente sempre completo em todo o sistema.
    */
   createMode?: "quick" | "full";
 }
@@ -57,7 +57,7 @@ export default function CustomerCombobox({
   disabled,
   includeInternal = false,
   allowCreate = true,
-  createMode = "quick",
+  createMode = "full",
 }: CustomerComboboxProps) {
   const { user } = useAuth();
   const { isManager, isVendedor } = usePermissions();
