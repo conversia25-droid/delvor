@@ -31,6 +31,8 @@ interface Fixed {
   linked_user_id: string | null;
   active: boolean;
   notes: string | null;
+  starts_on: string | null;
+  ends_on: string | null;
 }
 interface Category { id: string; name: string; }
 interface Person { id: string; name: string; }
@@ -51,6 +53,15 @@ function monthRefFromDate(year: number, monthIdx0: number) {
   // YYYY-MM-01
   const m = String(monthIdx0 + 1).padStart(2, "0");
   return `${year}-${m}-01`;
+}
+/** Vencimento da fixa no mês (dia 31 vira o último dia em meses curtos). */
+function dueInMonth(year: number, monthIdx0: number, dueDay: number) {
+  const last = new Date(year, monthIdx0 + 1, 0).getDate();
+  return `${year}-${String(monthIdx0 + 1).padStart(2, "0")}-${String(Math.min(dueDay, last)).padStart(2, "0")}`;
+}
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 function formatBR(iso: string | null) {
   if (!iso) return "—";
@@ -84,6 +95,8 @@ export default function FinanceiroFixas() {
   const [linkedUserDraft, setLinkedUserDraft] = useState<string | null>(null);
   const [activeDraft, setActiveDraft] = useState(true);
   const [notesDraft, setNotesDraft] = useState("");
+  const [startsDraft, setStartsDraft] = useState("");
+  const [endsDraft, setEndsDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const [processing, setProcessing] = useState<string | null>(null);
 
@@ -92,7 +105,7 @@ export default function FinanceiroFixas() {
     setLoading(true);
     const [fixasRes, catsRes, paysRes, peopleRes] = await Promise.all([
       supabase.from("fixed_expenses")
-        .select("id, name, amount_cents, due_day, category_id, linked_user_id, active, notes")
+        .select("id, name, amount_cents, due_day, category_id, linked_user_id, active, notes, starts_on, ends_on")
         .eq("company_id", user.company_id)
         .order("name", { ascending: true }),
       supabase.from("expense_categories")
@@ -144,9 +157,21 @@ export default function FinanceiroFixas() {
     return m;
   }, [people]);
 
+  // Só entra no mês a fixa cujo vencimento daquele mês cai entre "começa em"
+  // e "termina em" (ou que já foi paga nele). Assim uma fixa criada hoje não
+  // aparece atrasada nos meses anteriores.
+  const monthFixas = useMemo(() => fixas.filter((f) => {
+    if (paymentByFixed.has(f.id)) return true;
+    const due = dueInMonth(year, monthIdx, f.due_day);
+    if (f.starts_on && due < f.starts_on) return false;
+    if (f.ends_on && due > f.ends_on) return false;
+    return true;
+  }), [fixas, paymentByFixed, year, monthIdx]);
+  const hiddenCount = fixas.length - monthFixas.length;
+
   const totalActive = useMemo(
-    () => fixas.filter((f) => f.active).reduce((s, f) => s + f.amount_cents, 0),
-    [fixas],
+    () => monthFixas.filter((f) => f.active).reduce((s, f) => s + f.amount_cents, 0),
+    [monthFixas],
   );
   const totalPaid = useMemo(
     () => payments.reduce((s, p) => s + p.amount_cents, 0),
@@ -167,6 +192,8 @@ export default function FinanceiroFixas() {
     setLinkedUserDraft(null);
     setActiveDraft(true);
     setNotesDraft("");
+    setStartsDraft(todayISO());
+    setEndsDraft("");
     setDialogOpen(true);
   }
   function openEdit(row: Fixed) {
@@ -178,6 +205,8 @@ export default function FinanceiroFixas() {
     setLinkedUserDraft(row.linked_user_id);
     setActiveDraft(row.active);
     setNotesDraft(row.notes ?? "");
+    setStartsDraft(row.starts_on ?? "");
+    setEndsDraft(row.ends_on ?? "");
     setDialogOpen(true);
   }
 
@@ -186,6 +215,7 @@ export default function FinanceiroFixas() {
     if (!nameDraft.trim()) { toast({ title: "Informe um nome", variant: "destructive" }); return; }
     if (amountDraft <= 0) { toast({ title: "Informe o valor", variant: "destructive" }); return; }
     if (dueDayDraft < 1 || dueDayDraft > 31) { toast({ title: "Dia de vencimento inválido", variant: "destructive" }); return; }
+    if (startsDraft && endsDraft && endsDraft < startsDraft) { toast({ title: "O fim não pode ser antes do início", variant: "destructive" }); return; }
 
     setSaving(true);
     const payload = {
@@ -197,13 +227,16 @@ export default function FinanceiroFixas() {
       linked_user_id: linkedUserDraft,
       active: activeDraft,
       notes: notesDraft.trim() || null,
+      starts_on: startsDraft || null,
+      ends_on: endsDraft || null,
     };
     const { error } = editing
       ? await supabase.from("fixed_expenses").update({
           name: payload.name, amount_cents: payload.amount_cents, due_day: payload.due_day,
           category_id: payload.category_id, linked_user_id: payload.linked_user_id,
           active: payload.active, notes: payload.notes,
-        }).eq("id", editing.id)
+          starts_on: payload.starts_on, ends_on: payload.ends_on,
+        } as any).eq("id", editing.id)
       : await supabase.from("fixed_expenses").insert(payload as any);
 
     if (error) {
@@ -332,6 +365,26 @@ export default function FinanceiroFixas() {
                     />
                   </div>
                 </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Começa em</Label>
+                    <Input type="date" value={startsDraft} onChange={(e) => setStartsDraft(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Termina em <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+                    <Input type="date" value={endsDraft} min={startsDraft || undefined} onChange={(e) => setEndsDraft(e.target.value)} />
+                  </div>
+                </div>
+                <p className="-mt-2 text-xs text-muted-foreground">
+                  {startsDraft
+                    ? (() => {
+                        const [y, m] = startsDraft.split("-").map(Number);
+                        let first = dueInMonth(y, m - 1, dueDayDraft);
+                        if (first < startsDraft) first = dueInMonth(m === 12 ? y + 1 : y, m === 12 ? 0 : m, dueDayDraft);
+                        return `Primeiro vencimento: ${formatBR(first)}. Meses anteriores não são cobrados.`;
+                      })()
+                    : "Sem data de início: vale para todos os meses."}
+                </p>
                 <div>
                   <Label>Categoria</Label>
                   <Select
@@ -430,10 +483,12 @@ export default function FinanceiroFixas() {
             <TableBody>
               {loading ? (
                 <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">Carregando...</TableCell></TableRow>
-              ) : fixas.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">Nenhuma despesa fixa cadastrada.</TableCell></TableRow>
+              ) : monthFixas.length === 0 ? (
+                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">
+                  {fixas.length === 0 ? "Nenhuma despesa fixa cadastrada." : "Nenhuma despesa fixa neste mês."}
+                </TableCell></TableRow>
               ) : (
-                fixas.map((row) => {
+                monthFixas.map((row) => {
                   const st = statusFor(row);
                   const isProc = processing === row.id || processing === st.pay?.id;
                   return (
@@ -444,6 +499,13 @@ export default function FinanceiroFixas() {
                           <span className="ml-2 text-xs text-blue-500">
                             👤 {personById.get(row.linked_user_id) ?? "—"}
                           </span>
+                        )}
+                        {(row.starts_on || row.ends_on) && (
+                          <div className="text-xs font-normal text-muted-foreground">
+                            {row.starts_on && `desde ${formatBR(row.starts_on)}`}
+                            {row.starts_on && row.ends_on && " · "}
+                            {row.ends_on && `até ${formatBR(row.ends_on)}`}
+                          </div>
                         )}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
@@ -497,6 +559,11 @@ export default function FinanceiroFixas() {
               )}
             </TableBody>
           </Table>
+          {!loading && hiddenCount > 0 && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              {hiddenCount} despesa{hiddenCount > 1 ? "s" : ""} fixa{hiddenCount > 1 ? "s" : ""} fora do período neste mês (começa depois ou já terminou).
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>
