@@ -65,6 +65,7 @@ import {
 
 import type {
   Customer,
+  CustomerEquipment,
   PaymentMethod,
   PaymentStatus,
   Sale,
@@ -75,6 +76,8 @@ import type {
 import { SALE_STATUS_LABELS } from "@/types/delvor";
 import { formatBRL, phoneToJid } from "@/lib/formatters";
 import CustomerCombobox from "@/components/sales/CustomerCombobox";
+import EquipmentCombobox from "@/components/service-orders/EquipmentCombobox";
+import EquipmentFormDialog from "@/components/service-orders/EquipmentFormDialog";
 import AddItemDialog, { type PickedItem } from "@/components/sales/AddItemDialog";
 import TransferSaleDialog from "@/components/sales/TransferSaleDialog";
 import { generateSalePdf } from "@/lib/salePdf";
@@ -151,6 +154,11 @@ export default function SaleEditor() {
   const initialCustomerId = isNew ? searchParams.get("customer") : null;
   const [customerId, setCustomerId] = useState<string | null>(initialCustomerId);
   const [customer, setCustomer] = useState<Customer | null>(null);
+  // Equipamento do cliente (venda com serviço) — sai no PDF. Migration 64.
+  const [equipmentId, setEquipmentId] = useState<string | null>(null);
+  const [equipment, setEquipment] = useState<CustomerEquipment | null>(null);
+  const [equipmentRefresh, setEquipmentRefresh] = useState(0);
+  const [equipmentDialogOpen, setEquipmentDialogOpen] = useState(false);
   const [issueDate, setIssueDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [deliveryDate, setDeliveryDate] = useState<string>("");
   // Default do status:
@@ -245,6 +253,7 @@ export default function SaleEditor() {
       }
       setSelectedSellerId(s.seller_id);
       setCustomerId(s.customer_id);
+      setEquipmentId((s as any).equipment_id ?? null);
       setIssueDate(s.issue_date.slice(0, 10));
       setDeliveryDate(s.delivery_date ? s.delivery_date.slice(0, 10) : "");
       setStatus(s.status);
@@ -516,6 +525,9 @@ export default function SaleEditor() {
         remote_jid: customer?.remote_jid || null,
         source: "manual",
       };
+      // Só manda a coluna quando há equipamento (ou havia): banco sem a
+      // migration 64 continua salvando vendas normais.
+      if (equipmentId || (sale as any)?.equipment_id) headerPayload.equipment_id = equipmentId;
 
       // Amarra a venda no caixa aberto do VENDEDOR — em 2 momentos:
       //  1. CREATE (INSERT) — captura caixa que estava aberto na criação
@@ -535,7 +547,7 @@ export default function SaleEditor() {
         const { data, error } = await supabase.from("sales" as any).insert(headerPayload).select().single();
         if (error || !data) {
           setSaving(false);
-          toast({ title: "Erro ao salvar", description: error?.message, variant: "destructive" });
+          toast({ title: "Erro ao salvar", description: equipmentColumnMsg(error?.message), variant: "destructive" });
           return null;
         }
         saleId = (data as any).id;
@@ -544,7 +556,7 @@ export default function SaleEditor() {
         const { error } = await supabase.from("sales" as any).update(headerPayload).eq("id", saleId!);
         if (error) {
           setSaving(false);
-          toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+          toast({ title: "Erro ao salvar", description: equipmentColumnMsg(error.message), variant: "destructive" });
           return null;
         }
       }
@@ -665,11 +677,16 @@ export default function SaleEditor() {
       return;
     }
     const logoData = company?.logo_url ? await imageToDataUrl(company.logo_url) : null;
+    const eqId = (sr.data as any).equipment_id as string | null | undefined;
+    const pdfEquipment = eqId
+      ? ((await supabase.from("customer_equipments" as any).select("*").eq("id", eqId).maybeSingle()).data as any) ?? null
+      : null;
     generateSalePdf({
       sale: sr.data as any,
       customer,
       items: (ir.data as any[]) ?? [],
       payments: (pr.data as any[]) ?? [],
+      equipment: pdfEquipment,
       company,
       companyLogoDataUrl: logoData,
       companyName: user?.company_name || "Delvor",
@@ -788,7 +805,10 @@ export default function SaleEditor() {
             <Label>Cliente *</Label>
             <CustomerCombobox
               value={customerId}
-              onChange={(id) => setCustomerId(id)}
+              onChange={(id) => {
+                if (id !== customerId) { setEquipmentId(null); setEquipment(null); }
+                setCustomerId(id);
+              }}
               disabled={!editable}
               createMode="full"
             />
@@ -825,6 +845,39 @@ export default function SaleEditor() {
           </div>
         </div>
       </div>
+
+      {/* ============== EQUIPAMENTO (venda com serviço) ============== */}
+      {(items.some((i) => i.service_id) || equipmentId) && (
+        <div className="rounded-lg border bg-card p-4">
+          <div className="grid grid-cols-1 md:grid-cols-[2fr_3fr] gap-3 items-end">
+            <div>
+              <Label className="flex items-center justify-between">
+                Equipamento do cliente
+                {customerId && editable && (
+                  <button type="button" className="text-[11px] text-primary hover:underline inline-flex items-center" onClick={() => { setEquipment(null); setEquipmentDialogOpen(true); }}>
+                    <Plus className="h-3 w-3 mr-0.5" /> novo
+                  </button>
+                )}
+              </Label>
+              <EquipmentCombobox
+                customerId={customerId}
+                value={equipmentId}
+                onChange={(eid, eq) => { setEquipmentId(eid); setEquipment(eq); }}
+                onCreateRequested={() => { setEquipment(null); setEquipmentDialogOpen(true); }}
+                disabled={!editable || !customerId}
+                refreshKey={equipmentRefresh}
+              />
+            </div>
+            <p className={`text-xs ${equipmentId ? "text-muted-foreground" : "text-amber-700 dark:text-amber-400"}`}>
+              {!customerId
+                ? "Escolha o cliente para selecionar o equipamento."
+                : equipmentId
+                  ? "Marca, modelo e série saem no PDF da venda."
+                  : "Venda com serviço: informe em qual equipamento (marca e modelo saem no PDF)."}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ============== ITENS ============== */}
       <div className="rounded-lg border bg-card">
@@ -1091,6 +1144,18 @@ export default function SaleEditor() {
 
       <AddItemDialog open={pickerOpen} onOpenChange={setPickerOpen} onPick={pickItem} />
 
+      <EquipmentFormDialog
+        open={equipmentDialogOpen}
+        onOpenChange={setEquipmentDialogOpen}
+        customerId={customerId}
+        equipment={equipment}
+        onSaved={(eq) => {
+          setEquipmentId(eq.id);
+          setEquipment(eq);
+          setEquipmentRefresh((n) => n + 1);
+        }}
+      />
+
       {/* Dialog de parcelamento — divide o valor restante em N parcelas */}
       <Dialog open={installDialogOpen} onOpenChange={setInstallDialogOpen}>
         <DialogContent className="max-w-md">
@@ -1214,4 +1279,10 @@ export default function SaleEditor() {
       </AlertDialog>
     </div>
   );
+}
+
+/** Banco sem a migration 64 (sales.equipment_id): mensagem clara em vez do erro cru. */
+function equipmentColumnMsg(msg?: string | null) {
+  if (msg && /equipment_id/i.test(msg)) return "Para gravar o equipamento na venda, aplique a atualização do banco (migration 64).";
+  return msg || undefined;
 }

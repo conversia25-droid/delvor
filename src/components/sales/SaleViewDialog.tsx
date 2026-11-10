@@ -111,8 +111,12 @@ export default function SaleViewDialog({ saleId, open, onOpenChange }: SaleViewD
     setPrinting(true);
     const company = await loadCompanyHeader(user.company_id);
     const logoData = company?.logo_url ? await imageToDataUrl(company.logo_url) : null;
+    const eqId = (sale as any).equipment_id as string | null | undefined;
+    const equipment = eqId
+      ? ((await supabase.from("customer_equipments" as any).select("*").eq("id", eqId).maybeSingle()).data as any) ?? null
+      : null;
     generateSalePdf({
-      sale, customer, items, payments,
+      sale, customer, items, payments, equipment,
       company, companyLogoDataUrl: logoData,
       companyName: user?.company_name || "Delvor",
       sellerName: sellerName || user?.nome,

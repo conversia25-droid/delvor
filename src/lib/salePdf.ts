@@ -3,6 +3,7 @@ import autoTable from "jspdf-autotable";
 
 import type {
   Customer,
+  CustomerEquipment,
   Sale,
   SaleItem,
   SalePayment,
@@ -15,6 +16,8 @@ export interface SalePdfData {
   customer: Customer | null;
   items: SaleItem[];
   payments: SalePayment[];
+  /** Equipamento do cliente (venda com serviço). */
+  equipment?: CustomerEquipment | null;
   /** Dados completos da empresa do banco (recomendado). */
   company?: CompanyHeader | null;
   /** Logo já em data URI. */
@@ -73,6 +76,7 @@ export function generateSalePdf({
   customer,
   items,
   payments,
+  equipment,
   company,
   companyLogoDataUrl,
   companyName,
@@ -202,6 +206,23 @@ export function generateSalePdf({
     y += 4;
   }
 
+  // ---------------- EQUIPAMENTO ----------------
+  if (equipment) {
+    y += 3;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text("EQUIPAMENTO", margin, y);
+    y += 5;
+    doc.setFont("helvetica", "normal");
+    const title = [equipment.brand, equipment.model].filter(Boolean).join(" ") || "Equipamento";
+    const extra = [
+      equipment.serial_number && `Série: ${equipment.serial_number}`,
+      equipment.asset_tag && `Patrimônio: ${equipment.asset_tag}`,
+    ].filter(Boolean).join("  •  ");
+    doc.text(extra ? `${title}  •  ${extra}` : title, margin, y);
+    y += 5;
+  }
+
   // ---------------- ITENS ----------------
   y += 4;
   autoTable(doc, {
@@ -262,7 +283,15 @@ export function generateSalePdf({
   afterTable += 8;
 
   // ---------------- PAGAMENTOS ----------------
-  if (payments.length > 0) {
+  // Só a forma e o valor: parcelas, vencimentos e situação ficam no sistema
+  // (Contas a receber), não no documento do cliente.
+  const byMethod = new Map<string, number>();
+  for (const p of payments) {
+    if (p.status === "cancelado" || p.status === "estornado") continue;
+    const label = PAYMENT_LABEL[p.method] || p.method;
+    byMethod.set(label, (byMethod.get(label) || 0) + Number(p.amount || 0));
+  }
+  if (byMethod.size > 0) {
     if (afterTable > 240) { doc.addPage(); afterTable = 20; }
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
@@ -270,15 +299,11 @@ export function generateSalePdf({
     afterTable += 4;
     autoTable(doc, {
       startY: afterTable,
-      head: [["Método", "Vencimento", "Valor", "Status"]],
-      body: payments.map((p) => [
-        PAYMENT_LABEL[p.method] || p.method,
-        fmtDate(p.due_date),
-        formatBRL(p.amount),
-        (p.status || "").toUpperCase(),
-      ]),
+      head: [["Forma", { content: "Valor", styles: { halign: "right" } }]],
+      body: [...byMethod].map(([label, amount]) => [label, formatBRL(amount)]),
       headStyles: { fillColor: [60, 60, 60], textColor: 255, fontSize: 9 },
       bodyStyles: { fontSize: 9 },
+      columnStyles: { 1: { halign: "right", cellWidth: 40 } },
       margin: { left: margin, right: margin },
     });
     afterTable = (doc as any).lastAutoTable.finalY + 6;
