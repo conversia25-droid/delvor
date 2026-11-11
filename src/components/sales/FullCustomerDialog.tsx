@@ -41,6 +41,8 @@ interface FullCustomerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialName?: string;
+  /** Número (só dígitos, com ou sem 55) para já vir preenchido no WhatsApp. */
+  initialWhatsapp?: string;
   onCreated?: (customer: Customer) => void;
 }
 
@@ -91,7 +93,7 @@ const EMPTY_FORM: FormState = {
 };
 
 export default function FullCustomerDialog({
-  open, onOpenChange, initialName, onCreated,
+  open, onOpenChange, initialName, initialWhatsapp, onCreated,
 }: FullCustomerDialogProps) {
   const { user } = useAuth();
   const { canManageInternalCustomers } = usePermissions();
@@ -102,8 +104,10 @@ export default function FullCustomerDialog({
 
   useEffect(() => {
     if (!open) return;
-    setForm({ ...EMPTY_FORM, name: initialName || "" });
-  }, [open, initialName]);
+    const wpp = (initialWhatsapp || "").replace(/\D/g, "");
+    const local = wpp.length >= 12 && wpp.startsWith("55") ? wpp.slice(2) : wpp;
+    setForm({ ...EMPTY_FORM, name: initialName || "", whatsapp: local ? maskPhone(local) : "" });
+  }, [open, initialName, initialWhatsapp]);
 
   async function handleCnpjBlur() {
     if (form.person_type !== "PJ") return;

@@ -12,9 +12,13 @@ import {
   FileText,
   Loader2,
   Pencil,
+  AlertTriangle,
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { fetchCustomerPending, pendingMessage, setChatDraft, type CustomerPending } from "@/lib/customerPending";
+import { METHOD_LABELS } from "@/lib/receivables";
 import { toast } from "@/components/ui/use-toast";
 
 import { Button } from "@/components/ui/button";
@@ -48,7 +52,9 @@ import EquipmentFormDialog from "@/components/service-orders/EquipmentFormDialog
 export default function CustomerDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
+  const [pending, setPending] = useState<CustomerPending | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [equipments, setEquipments] = useState<CustomerEquipment[]>([]);
   const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>([]);
@@ -75,6 +81,14 @@ export default function CustomerDetail() {
     setEquipments(((er.data as any[]) ?? []) as any);
     setServiceOrders(((sr.data as any[]) ?? []) as any);
     setSales(((sar.data as any[]) ?? []) as any);
+    fetchCustomerPending(id).then(setPending);
+  }
+
+  /** Leva a cobrança pronta para a caixa de texto do chat (o usuário confere e envia). */
+  function chargeOnWhatsapp() {
+    if (!customer?.remote_jid || !pending?.items.length) return;
+    setChatDraft(customer.remote_jid, pendingMessage({ customer: customer.name, company: user?.company_name, items: pending.items }));
+    navigate(`/chat?jid=${encodeURIComponent(customer.remote_jid)}`);
   }
 
   useEffect(() => { load(); }, [id]);
@@ -139,6 +153,48 @@ export default function CustomerDetail() {
           </Button>
         </div>
       </div>
+
+      {/* Valores em aberto */}
+      {pending && pending.total > 0.004 && (
+        <div className={`rounded-lg border p-4 ${pending.overdueCount ? "border-red-500/40 bg-red-500/[0.04]" : "border-amber-500/40 bg-amber-500/[0.04]"}`}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className={`h-5 w-5 ${pending.overdueCount ? "text-red-600" : "text-amber-600"}`} />
+              <div>
+                <div className="font-semibold">
+                  {formatBRL(pending.total)} em aberto
+                  <span className="ml-1 text-sm font-normal text-muted-foreground">({pending.items.length} pagamento{pending.items.length > 1 ? "s" : ""})</span>
+                </div>
+                {pending.overdueCount > 0 && (
+                  <div className="text-sm text-red-700 dark:text-red-400">{formatBRL(pending.overdueTotal)} vencido{pending.overdueCount > 1 ? "s" : ""}</div>
+                )}
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              disabled={!customer.remote_jid}
+              title={customer.remote_jid ? "Abre a conversa com a cobrança pronta para enviar" : "Cliente sem WhatsApp no cadastro"}
+              onClick={chargeOnWhatsapp}
+            >
+              <MessageSquare className="h-4 w-4 mr-1 text-emerald-500" /> Cobrar no WhatsApp
+            </Button>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {pending.items.map((i) => (
+              <button
+                key={i.id}
+                onClick={() => navigate(`/sales/${i.sale_id}`)}
+                className="rounded-md border bg-card px-2.5 py-1.5 text-left text-xs hover:bg-muted/50"
+              >
+                <span className="font-medium">{METHOD_LABELS[i.method] || i.method} {formatBRL(i.amount)}</span>
+                <span className={`block ${i.overdue ? "text-red-700 dark:text-red-400" : "text-muted-foreground"}`}>
+                  {i.due_date ? `${i.overdue ? "venceu" : "vence"} ${formatDateBR(i.due_date)}` : "sem vencimento"} · venda {String(i.sale_number).padStart(6, "0")}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <Tabs defaultValue="dados">

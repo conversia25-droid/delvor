@@ -28,6 +28,8 @@ import { InboxEmptyState } from "./whatsapp-inbox/InboxEmptyState";
 import { HiddenConversationsDialog } from "./whatsapp-inbox/HiddenConversationsDialog";
 import { ConversationContextMenu } from "./whatsapp-inbox/ConversationContextMenu";
 import { AddUserDialog } from "./whatsapp-inbox/AddUserDialog";
+import ChatCustomerActions from "./whatsapp-inbox/ChatCustomerActions";
+import { takeChatDraft } from "@/lib/customerPending";
 
 function __readEnvVar(name: string): string | undefined {
   // Runtime config (window.__OSM_ENV__) prevalece sobre import.meta.env
@@ -666,6 +668,12 @@ export default function WhatsAppInbox({ showLite = true, showApi = true }: Whats
   const [leadCacheLoaded, setLeadCacheLoaded] = useState(false);
   const [teamUsers, setTeamUsers] = useState<Array<{ id: string; nome: string; email?: string }>>([]);
   const [text, setText] = useState("");
+  // Recado deixado pela ficha do cliente ("Cobrar no WhatsApp"): entra na caixa de texto.
+  useEffect(() => {
+    if (!currentLead) return;
+    const draft = takeChatDraft(currentLead);
+    if (draft) setText(draft);
+  }, [currentLead]);
 
   const [openEmojiPicker, setOpenEmojiPicker] = useState(false);
 
@@ -4987,6 +4995,13 @@ orderedLeads.slice(0, leadListLimit).map((msg) => {
                           )}
                         </PopoverContent>
                       </Popover>
+
+                      {/* 💰 PENDÊNCIA + NOVA VENDA / OS */}
+                      <ChatCustomerActions
+                        jid={leadMeta?.remote_jid || currentLead}
+                        name={leadMeta?.lead_name || null}
+                        onInsertText={(t) => setText(t)}
+                      />
 
                       {/* 🏆 BOTÃO DE CONTRATO FECHADO */}
                       <button

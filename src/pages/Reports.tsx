@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   BarChart3, Loader2, TrendingUp, Receipt, Users, Package,
   Percent, Calendar, RefreshCw, Trophy, Wrench, FileDown, FileSpreadsheet,
@@ -130,10 +130,12 @@ function Kpi({ icon: Icon, label, value, tone, hint }: { icon: any; label: strin
 /* ====================================================================
    SHELL
 ==================================================================== */
-type ReportTab = "vendas" | "comissoes" | "estoque" | "os";
+type ReportTab = "vendas" | "comissoes" | "estoque" | "os" | "despesas";
 
 export default function Reports() {
   const perms = usePermissions();
+  const { hasRole } = useAuth();
+  const canFinance = perms.isManager || hasRole("financeiro");
   const [tab, setTab] = useState<ReportTab>("vendas");
   return (
     <div className="space-y-5">
@@ -142,7 +144,7 @@ export default function Reports() {
           <BarChart3 className="h-7 w-7" /> Relatórios
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Vendas, estoque e ordens de serviço — exportáveis em CSV e PDF.
+          Vendas, despesas, estoque e ordens de serviço — exportáveis em CSV e PDF.
         </p>
       </div>
 
@@ -154,6 +156,9 @@ export default function Reports() {
           )}
           <TabsTrigger value="estoque"><Package className="h-3.5 w-3.5 mr-1" /> Estoque</TabsTrigger>
           <TabsTrigger value="os"><Wrench className="h-3.5 w-3.5 mr-1" /> OS</TabsTrigger>
+          {canFinance && (
+            <TabsTrigger value="despesas"><Wallet className="h-3.5 w-3.5 mr-1" /> Despesas</TabsTrigger>
+          )}
         </TabsList>
         <TabsContent value="vendas" className="mt-5"><SalesReport /></TabsContent>
         {perms.isManager && (
@@ -161,6 +166,9 @@ export default function Reports() {
         )}
         <TabsContent value="estoque" className="mt-5"><StockReport /></TabsContent>
         <TabsContent value="os" className="mt-5"><OsReport /></TabsContent>
+        {canFinance && (
+          <TabsContent value="despesas" className="mt-5"><ExpensesReport /></TabsContent>
+        )}
       </Tabs>
     </div>
   );
@@ -1745,6 +1753,246 @@ function OsReport() {
 }
 
 /* ── componentes auxiliares ── */
+/* ====================================================================
+   RELATÓRIO DE DESPESAS (por categoria) — RPC expense_report (migration 70)
+   Mesmo critério do DRE: contas pelo vencimento, variáveis pelo pagamento,
+   empréstimo só com os juros.
+==================================================================== */
+type ExpenseRow = {
+  id: string; kind: string; description: string; category: string; supplier: string | null;
+  ref_date: string; amount: number; status: "paga" | "aberta"; paid_on: string | null; paid_amount: number | null;
+};
+const EXPENSE_KIND: Record<string, string> = { conta: "Conta", compra: "Compra", fixa: "Fixa", variavel: "Variável", juros: "Juros" };
+
+/** Despesa olha o mês/ano inteiro (contas que ainda vão vencer contam). */
+function expenseRange(preset: string) {
+  const now = new Date();
+  if (preset === "month") return { start: isoDate(new Date(now.getFullYear(), now.getMonth(), 1)), end: isoDate(new Date(now.getFullYear(), now.getMonth() + 1, 0)) };
+  if (preset === "year") return { start: isoDate(new Date(now.getFullYear(), 0, 1)), end: isoDate(new Date(now.getFullYear(), 11, 31)) };
+  return presetRange(preset);
+}
+
+function ExpensesReport() {
+  const { user } = useAuth();
+  const companyId = user?.company_id;
+  const [preset, setPreset] = useState("month");
+  const [range, setRange] = useState(() => expenseRange("month"));
+  const [rows, setRows] = useState<ExpenseRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"todas" | "paga" | "aberta">("todas");
+  const [openCat, setOpenCat] = useState<string | null>(null);
+
+  async function load() {
+    setLoading(true);
+    const { data, error } = await supabase.rpc("expense_report" as any, { p_from: range.start, p_to: range.end });
+    setLoading(false);
+    if (error) {
+      setRows([]);
+      setError(/expense_report|could not find the function/i.test(error.message)
+        ? "Este relatório precisa da atualização do banco (migration 70)."
+        : error.message);
+      return;
+    }
+    setError(null);
+    setRows(((data as any[]) || []).map((r) => ({
+      ...r, amount: Number(r.amount || 0), paid_amount: r.paid_amount == null ? null : Number(r.paid_amount),
+      ref_date: String(r.ref_date).slice(0, 10), paid_on: r.paid_on ? String(r.paid_on).slice(0, 10) : null,
+    })));
+  }
+  useEffect(() => { load(); }, [range.start, range.end]);
+
+  const visible = useMemo(() => rows.filter((r) => statusFilter === "todas" || r.status === statusFilter), [rows, statusFilter]);
+
+  const cats = useMemo(() => {
+    const m = new Map<string, { category: string; total: number; paga: number; aberta: number; count: number }>();
+    visible.forEach((r) => {
+      const c = m.get(r.category) ?? { category: r.category, total: 0, paga: 0, aberta: 0, count: 0 };
+      c.total += r.amount; c.count += 1;
+      if (r.status === "paga") c.paga += r.amount; else c.aberta += r.amount;
+      m.set(r.category, c);
+    });
+    return [...m.values()].sort((a, b) => b.total - a.total);
+  }, [visible]);
+
+  const total = cats.reduce((s, c) => s + c.total, 0);
+  const totalPaga = cats.reduce((s, c) => s + c.paga, 0);
+  const totalAberta = cats.reduce((s, c) => s + c.aberta, 0);
+  const pct = (v: number) => (total > 0 ? (v / total) * 100 : 0);
+  const fmtD = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : "—");
+  const periodLabel = `${fmtD(range.start)} a ${fmtD(range.end)}`;
+
+  function exportCSV() {
+    downloadCSV(
+      `despesas_${range.start}_${range.end}`,
+      [
+        { key: "category", label: "Categoria" }, { key: "ref_date", label: "Data" },
+        { key: "description", label: "Descrição" }, { key: "supplier", label: "Fornecedor" },
+        { key: "kind", label: "Tipo" }, { key: "status", label: "Situação" },
+        { key: "amount", label: "Valor" }, { key: "paid_on", label: "Pago em" }, { key: "paid_amount", label: "Valor pago" },
+      ],
+      visible.map((r) => ({
+        category: r.category, ref_date: fmtD(r.ref_date), description: r.description, supplier: r.supplier || "",
+        kind: EXPENSE_KIND[r.kind] || r.kind, status: r.status === "paga" ? "Paga" : "Em aberto",
+        amount: r.amount.toFixed(2).replace(".", ","), paid_on: r.paid_on ? fmtD(r.paid_on) : "",
+        paid_amount: r.paid_amount == null ? "" : r.paid_amount.toFixed(2).replace(".", ","),
+      })),
+    );
+  }
+
+  async function exportPDF() {
+    const { companyName, logoDataUrl } = await loadReportBranding(companyId);
+    downloadReportPDF({
+      title: "Relatório de Despesas",
+      subtitle: `${periodLabel}${statusFilter === "todas" ? "" : statusFilter === "paga" ? "  ·  Só pagas" : "  ·  Só em aberto"}`,
+      companyName,
+      logoDataUrl,
+      filename: `despesas_${range.start}_${range.end}.pdf`,
+      sections: [
+        {
+          heading: `Por categoria — total ${formatBRL(total)}`,
+          columns: [
+            { header: "Categoria", dataKey: "category" },
+            { header: "Qtd", dataKey: "count", align: "right" },
+            { header: "Pago", dataKey: "paga", align: "right" },
+            { header: "Em aberto", dataKey: "aberta", align: "right" },
+            { header: "Total", dataKey: "total", align: "right" },
+            { header: "%", dataKey: "pct", align: "right" },
+          ],
+          rows: cats.map((c) => ({
+            category: c.category, count: c.count, paga: formatBRL(c.paga), aberta: formatBRL(c.aberta),
+            total: formatBRL(c.total), pct: `${pct(c.total).toFixed(1).replace(".", ",")}%`,
+          })),
+        },
+        {
+          heading: `Lançamentos (${visible.length})`,
+          columns: [
+            { header: "Data", dataKey: "ref_date" },
+            { header: "Categoria", dataKey: "category" },
+            { header: "Descrição", dataKey: "description" },
+            { header: "Situação", dataKey: "status", align: "center" },
+            { header: "Valor", dataKey: "amount", align: "right" },
+          ],
+          rows: visible.map((r) => ({
+            ref_date: fmtD(r.ref_date), category: r.category, description: r.supplier ? `${r.description} · ${r.supplier}` : r.description,
+            status: r.status === "paga" ? "Paga" : "Em aberto", amount: formatBRL(r.amount),
+          })),
+        },
+      ],
+    });
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <ExportButtons onCSV={exportCSV} onPDF={exportPDF} />
+        <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+        </Button>
+      </div>
+
+      <PeriodFilter
+        preset={preset}
+        range={range}
+        onPreset={(k) => { setPreset(k); setRange(expenseRange(k)); }}
+        onCustom={(a, b) => { setPreset("custom"); setRange({ start: a, end: b }); }}
+      />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-muted-foreground">Situação:</span>
+        {([["todas", "Todas"], ["paga", "Pagas"], ["aberta", "Em aberto"]] as const).map(([k, label]) => (
+          <button key={k} onClick={() => setStatusFilter(k)}
+            className={`text-xs px-3 py-1 rounded-full ring-1 transition ${statusFilter === k ? "bg-blue-600 ring-blue-600 text-white font-medium" : "bg-background ring-blue-500/30 text-muted-foreground"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {loading ? <Loading /> : error ? (
+        <div className="rounded-lg border bg-card px-6 py-12 text-center text-sm text-muted-foreground">{error}</div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <Kpi icon={Wallet} label="Despesas no período" value={formatBRL(total)} hint={`${visible.length} lançamento${visible.length === 1 ? "" : "s"}`} />
+            <Kpi icon={CheckCircle2} label="Já pago" value={formatBRL(totalPaga)} tone="emerald" />
+            <Kpi icon={CalendarClock} label="Em aberto" value={formatBRL(totalAberta)} tone="amber" />
+            <Kpi icon={Trophy} label="Maior categoria" value={cats[0] ? cats[0].category : "—"}
+              hint={cats[0] ? `${formatBRL(cats[0].total)} · ${pct(cats[0].total).toFixed(0)}% do total` : undefined} />
+          </div>
+
+          <ReportCard icon={Wallet} title="Despesas por categoria">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Categoria</TableHead>
+                  <TableHead className="text-right">Qtd</TableHead>
+                  <TableHead className="text-right">Pago</TableHead>
+                  <TableHead className="text-right">Em aberto</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="w-48">% do total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {cats.length === 0 && <EmptyRow cols={6} />}
+                {cats.map((c) => (
+                  <Fragment key={c.category}>
+                    <TableRow className="cursor-pointer hover:bg-muted/30" onClick={() => setOpenCat(openCat === c.category ? null : c.category)}>
+                      <TableCell className="font-medium">{openCat === c.category ? "▾" : "▸"} {c.category}</TableCell>
+                      <TableCell className="text-right num">{c.count}</TableCell>
+                      <TableCell className="text-right num text-muted-foreground">{formatBRL(c.paga)}</TableCell>
+                      <TableCell className="text-right num text-muted-foreground">{formatBRL(c.aberta)}</TableCell>
+                      <TableCell className="text-right num font-semibold">{formatBRL(c.total)}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                            <div className="h-full rounded-full bg-primary" style={{ width: `${pct(c.total)}%` }} />
+                          </div>
+                          <span className="w-12 text-right text-xs num text-muted-foreground">{pct(c.total).toFixed(1).replace(".", ",")}%</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                    {openCat === c.category && visible.filter((r) => r.category === c.category).map((r) => (
+                      <TableRow key={`${r.kind}-${r.id}`} className="bg-muted/20 text-xs">
+                        <TableCell className="pl-8">
+                          {r.description}
+                          {r.supplier && <span className="text-muted-foreground"> · {r.supplier}</span>}
+                          <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{EXPENSE_KIND[r.kind] || r.kind}</span>
+                        </TableCell>
+                        <TableCell className="text-right num text-muted-foreground">{fmtD(r.ref_date)}</TableCell>
+                        <TableCell className="text-right num" colSpan={2}>
+                          {r.status === "paga"
+                            ? <span className="text-emerald-700 dark:text-emerald-400">paga {r.paid_on ? fmtD(r.paid_on) : ""}</span>
+                            : <span className="text-amber-700 dark:text-amber-400">em aberto</span>}
+                        </TableCell>
+                        <TableCell className="text-right num">{formatBRL(r.amount)}</TableCell>
+                        <TableCell />
+                      </TableRow>
+                    ))}
+                  </Fragment>
+                ))}
+                {cats.length > 0 && (
+                  <TableRow className="bg-muted/40 font-semibold">
+                    <TableCell>Total</TableCell>
+                    <TableCell className="text-right num">{visible.length}</TableCell>
+                    <TableCell className="text-right num">{formatBRL(totalPaga)}</TableCell>
+                    <TableCell className="text-right num">{formatBRL(totalAberta)}</TableCell>
+                    <TableCell className="text-right num">{formatBRL(total)}</TableCell>
+                    <TableCell />
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </ReportCard>
+          <p className="text-xs text-muted-foreground">
+            Mesmo critério do DRE: contas e despesas fixas pela data de vencimento, despesas variáveis pela data do pagamento,
+            empréstimos só com os juros. Contas canceladas ficam de fora. Clique numa categoria para ver os lançamentos.
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
 function Loading() {
   return (
     <div className="flex items-center justify-center py-16 text-muted-foreground">
