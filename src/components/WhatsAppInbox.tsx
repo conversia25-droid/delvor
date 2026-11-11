@@ -952,6 +952,12 @@ export default function WhatsAppInbox({ showLite = true, showApi = true }: Whats
 
   const [instancias, setInstancias] = useState<Instancia[]>([]);
   const [selectedInstanceId, setSelectedInstanceId] = useState<string>("");
+  // Apelido de cada número (instance_name → label), inclusive os desconectados,
+  // e por qual número foi a última conversa de cada contato (migration 71).
+  const [instanceLabels, setInstanceLabels] = useState<Map<string, string>>(new Map());
+  const [jidInstance, setJidInstance] = useState<Map<string, string>>(new Map());
+  const [instanceFilter, setInstanceFilter] = useState<string>("");
+  const instLabel = (inst: any, fallback?: string | null) => inst?.label || inst?.instance_name || fallback || "—";
 
   const [contextMenu, setContextMenu] = useState<{ open: boolean; x: number; y: number; jid: string | null; }>({ open: false, x: 0, y: 0, jid: null });
 
@@ -1906,14 +1912,34 @@ export default function WhatsAppInbox({ showLite = true, showApi = true }: Whats
 
   async function loadInstancias() {
     if (!companyId) { setInstancias([]); setSelectedInstanceId(""); return; }
-    const { data, error } = await supabase.from("instancias").select("instance_name,instance_key,token_id,phone_number,status,company_id,user_id").eq("status", "CONNECTED").eq("company_id", companyId).not("company_id", "is", null);
+    const cols = "instance_name,instance_key,token_id,phone_number,status,company_id,user_id,is_default";
+    // `label` só existe com a migration 71 — sem ela, carrega como antes.
+    let { data, error } = await supabase.from("instancias").select(`${cols},label` as any).eq("status", "CONNECTED").eq("company_id", companyId).not("company_id", "is", null);
+    if (error) ({ data, error } = await supabase.from("instancias").select(cols as any).eq("status", "CONNECTED").eq("company_id", companyId).not("company_id", "is", null));
     if (error) { console.error("loadInstancias error:", error); setInstancias([]); setSelectedInstanceId(""); return; }
-    const rows = (data as Instancia[]) || [];
+    loadInstanceLabels();
+    const rows = ((data as unknown) as Instancia[]) || [];
     setInstancias(rows);
     if (!selectedInstanceId && rows.length) {
       const first = rows[0];
       if (first?.instance_key) setSelectedInstanceId(first.instance_key);
     }
+  }
+
+  async function loadInstanceLabels() {
+    if (!companyId) return;
+    const { data, error } = await supabase.from("instancias").select("instance_name,label" as any).eq("company_id", companyId);
+    if (error || !data) return;
+    setInstanceLabels(new Map((data as any[]).map((i) => [String(i.instance_name), String(i.label || i.instance_name)])));
+    const r = await supabase.rpc("inbox_jid_instances" as any);
+    if (r.error || !r.data) return;
+    const m = new Map<string, string>();
+    (r.data as any[]).forEach((x) => {
+      if (!x.remote_jid || !x.instance_id) return;
+      m.set(String(x.remote_jid), String(x.instance_id));
+      m.set(normalizeJid(String(x.remote_jid)), String(x.instance_id));
+    });
+    setJidInstance(m);
   }
 
   async function loadFunnels() {
@@ -2298,6 +2324,10 @@ const lastMessageByLead = useMemo(() => {
         return tagFilterJids.has(jid) || tagFilterJids.has(normalizeJid(jid));
       })
       .filter(([jid]) => {
+        if (!instanceFilter) return true;
+        return (jidInstance.get(jid) || jidInstance.get(normalizeJid(jid))) === instanceFilter;
+      })
+      .filter(([jid]) => {
         if (!onlyUnread) return true;
         const unread = unreadByJid.get(normalizeJid(jid))?.unread_count || 0;
         return unread > 0;
@@ -2357,7 +2387,7 @@ const lastMessageByLead = useMemo(() => {
       });
   }, [
     companyId, leadCache, leadCacheLoaded, isAdmin, hiddenJids, search, tagFilterId,
-    tagFilterJids, onlyUnread, unreadByJid, lastMessageByLead, leadSortOrder,
+    tagFilterJids, onlyUnread, unreadByJid, lastMessageByLead, leadSortOrder, instanceFilter, jidInstance,
     adminUserFilter, urlUserFilter, adminFunnelFilter, adminStageFilter, myUserId,
     showLite, showApi
   ]);
@@ -4386,7 +4416,7 @@ async function sendReaction(msg: Message, emoji: string) {
     const originalInst: any = findInst(originalKey);
 
     const fmt = (inst: any, key: string) => {
-      const label = (inst?.instance_name as string | undefined) || (inst?.instance_key as string | undefined) || key || "—";
+      const label = (inst?.label as string | undefined) || (inst?.instance_name as string | undefined) || (inst?.instance_key as string | undefined) || key || "—";
       const phone = inst?.phone_number ? String(inst.phone_number) : null;
       const status = inst?.status as string | undefined;
       return { label, phone, status, key };
@@ -4491,6 +4521,13 @@ async function sendReaction(msg: Message, emoji: string) {
             {tagsCatalog.map((t) => ( <option key={t.id} value={t.id}>{t.name}</option> ))}
           </select>
           {loadingTagFilter && tagFilterId ? <span className="text-[10px] opacity-50 shrink-0">…</span> : null}
+
+          {instanceLabels.size > 1 && (
+            <select className="h-9 rounded-md border bg-background px-2 text-xs min-w-0 flex-1 truncate opacity-70 hover:opacity-100 transition" value={instanceFilter} onChange={(e) => setInstanceFilter(e.target.value)} title="Filtrar por número da empresa">
+              <option value="">📱 Todos os números</option>
+              {[...instanceLabels.entries()].map(([key, label]) => ( <option key={key} value={key}>{label}</option> ))}
+            </select>
+          )}
 
           <div className="flex items-center gap-2 shrink-0">
             {isAdmin && (
@@ -4735,6 +4772,14 @@ orderedLeads.slice(0, leadListLimit).map((msg) => {
                           {label}
                         </div>
                       );
+                    })()}
+
+                    {instanceLabels.size > 1 && (() => {
+                      const k = jidInstance.get(msg.remote_jid) || jidInstance.get(normalizeJid(msg.remote_jid)) || msg.instance_id;
+                      const l = k ? instanceLabels.get(String(k)) : null;
+                      return l ? (
+                        <span className="ml-auto mr-1 max-w-[90px] truncate rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground" title={`Conversa pelo número: ${l}`}>📱 {l}</span>
+                      ) : null;
                     })()}
 
                     <span className={`text-[11px] whitespace-nowrap shrink-0 ${ isUnread ? "text-primary font-bold" : "text-muted-foreground" }`} >
@@ -5049,7 +5094,7 @@ orderedLeads.slice(0, leadListLimit).map((msg) => {
                         const leadSendKey = isValid && rawKey ? String(rawKey) : undefined;
                         const isInstanceOnline = !!(rawKey && instancias?.some((i: any) => i.instance_key === rawKey && i.status === "CONNECTED"));
                         const currentInst = instancias.find((i: any) => String(i.instance_key) === String(rawKey));
-                        const currentInstName = currentInst?.instance_name || rawKey || "—";
+                        const currentInstName = instLabel(currentInst, rawKey);
 
                         return (
                           <Popover modal={true}>
@@ -5084,7 +5129,7 @@ orderedLeads.slice(0, leadListLimit).map((msg) => {
                                     if (!keyStr) return null;
                                     return (
                                       <SelectItem key={keyStr} value={keyStr}>
-                                        {inst.instance_name || keyStr}
+                                        {instLabel(inst, keyStr)}
                                       </SelectItem>
                                     );
                                   })}

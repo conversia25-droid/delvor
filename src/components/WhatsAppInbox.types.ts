@@ -79,5 +79,8 @@ export interface Instancia {
   status: string | null;
   company_id: string | null;
   user_id: string | null;
+  /** Apelido do número (Configurações → WhatsApp). Migration 71. */
+  label?: string | null;
+  is_default?: boolean | null;
 }
 

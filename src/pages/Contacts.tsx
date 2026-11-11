@@ -85,7 +85,7 @@ type ContactRow = {
 
 type Funnel = { id: string; name: string };
 type UserOption = { id: string; nome: string };
-type InstanceOption = { id: string; name: string; phone: string | null };
+type InstanceOption = { id: string; name: string; phone: string | null; label?: string | null };
 
 // Opções de ordenação
 type SortOrder = "newest" | "oldest" | "az" | "za";
@@ -199,6 +199,11 @@ export default function Contacts() {
   const [funnels, setFunnels] = useState<Funnel[]>([]);
   const [users, setUsers] = useState<UserOption[]>([]);
   const [instances, setInstances] = useState<InstanceOption[]>([]);
+  // Números da empresa: apelido (instance_name → label) e por qual número
+  // foi a última conversa de cada contato (migration 71).
+  const [instLabels, setInstLabels] = useState<Map<string, string>>(new Map());
+  const [jidInst, setJidInst] = useState<Map<string, string>>(new Map());
+  const [filterInstance, setFilterInstance] = useState<string>("all");
   
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newLeadName, setNewLeadName] = useState("");
@@ -234,21 +239,28 @@ export default function Contacts() {
         }
       });
 
-    supabase
-      .from("instancias")
-      .select("id, instance_name, phone_number")
-      .eq("company_id", companyId)
-      .eq("status", "CONNECTED")
-      .then(({ data }) => {
-        if (data) {
-          const formatted = data.map((i: any) => ({
-            id: i.id,
-            name: i.instance_name,
-            phone: i.phone_number ? String(i.phone_number) : null,
-          }));
-          setInstances(formatted);
-        }
+    (async () => {
+      // `label` só existe com a migration 71 — sem ela, carrega como antes.
+      let { data, error } = await supabase.from("instancias").select("id, instance_name, phone_number, status, label" as any).eq("company_id", companyId);
+      if (error) ({ data, error } = await supabase.from("instancias").select("id, instance_name, phone_number, status" as any).eq("company_id", companyId));
+      if (error || !data) return;
+      const all = data as any[];
+      setInstances(all.filter((i) => i.status === "CONNECTED").map((i) => ({
+        id: i.id,
+        name: i.instance_name,
+        phone: i.phone_number ? String(i.phone_number) : null,
+        label: i.label || null,
+      })));
+      setInstLabels(new Map(all.map((i) => [String(i.instance_name), String(i.label || i.instance_name)])));
+      const r = await supabase.rpc("inbox_jid_instances" as any);
+      if (r.error || !r.data) return;
+      const m = new Map<string, string>();
+      (r.data as any[]).forEach((x) => {
+        const d = String(x.remote_jid || "").split("@")[0].replace(/\D/g, "");
+        if (d && x.instance_id) m.set(d, String(x.instance_id));
       });
+      setJidInst(m);
+    })();
   }, [companyId]);
 
   useEffect(() => {
@@ -342,7 +354,7 @@ export default function Contacts() {
   // Volta para a página 1 se mudar filtro, ordem ou limite por página
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, sortOrder, pageSize, filterUf]);
+  }, [search, sortOrder, pageSize, filterUf, filterInstance]);
 
   // Lista de UFs presentes nos contatos (para popular o dropdown)
   const availableUfs = useMemo(
@@ -378,6 +390,12 @@ export default function Contacts() {
           }
         }
 
+        // 1b) Filtro por número da empresa (por onde foi a última conversa)
+        if (filterInstance !== "all") {
+          const d = (c.remote_jid || "").split("@")[0].replace(/\D/g, "");
+          if (jidInst.get(d) !== filterInstance) return false;
+        }
+
         // 2) Sem termo de busca → mostra tudo (passou no filtro UF)
         if (!rawTerm) return true;
 
@@ -410,7 +428,7 @@ export default function Contacts() {
         if (sortOrder === "za") return nameB.localeCompare(nameA);
         return 0;
       });
-  }, [contacts, search, filterUf, sortOrder]);
+  }, [contacts, search, filterUf, sortOrder, filterInstance, jidInst]);
 
   // Fatiar array para a página atual (PAGINAÇÃO)
   const totalItems = filteredAndSortedContacts.length;
@@ -729,6 +747,21 @@ export default function Contacts() {
             </SelectContent>
           </Select>
 
+          {/* FILTRO POR NÚMERO DA EMPRESA (só com mais de um número) */}
+          {instLabels.size > 1 && (
+            <Select value={filterInstance} onValueChange={setFilterInstance}>
+              <SelectTrigger className="w-[170px] bg-background">
+                <SelectValue placeholder="Número" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">📱 Todos os números</SelectItem>
+                {[...instLabels.entries()].map(([key, label]) => (
+                  <SelectItem key={key} value={key}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
           {/* ORDENAÇÃO */}
           <div className="flex items-center gap-2">
             <Select value={sortOrder} onValueChange={(val: SortOrder) => setSortOrder(val)}>
@@ -842,9 +875,10 @@ export default function Contacts() {
                     </SelectTrigger>
                     <SelectContent>
                       {instances.map((inst) => {
-                        const label = inst.phone 
-                          ? `${inst.name} (+${inst.phone})`
-                          : inst.name;
+                        const nome = inst.label || inst.name;
+                        const label = inst.phone
+                          ? `${nome} (+${inst.phone})`
+                          : nome;
                         
                         return (
                           <SelectItem key={inst.id} value={inst.id}>
@@ -964,7 +998,7 @@ export default function Contacts() {
 
                     <TableCell className="hidden md:table-cell">
                       {contact.source ? (
-                        <Badge variant="outline">{contact.source}</Badge>
+                        <Badge variant="outline">{instLabels.get(contact.source) || contact.source}</Badge>
                       ) : (
                         <span className="text-muted-foreground text-xs">-</span>
                       )}
