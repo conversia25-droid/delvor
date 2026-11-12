@@ -7,9 +7,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  AlertTriangle, CalendarClock, CheckCircle2, Copy, History, Landmark, Loader2, MoreHorizontal, Paperclip, Pencil,
+  AlertTriangle, CalendarClock, CheckCircle2, Copy, Download, History, Landmark, Loader2, MoreHorizontal, Paperclip, Pencil,
   Plus, Receipt, Search, Undo2, XCircle,
 } from "lucide-react";
+import {
+  ActiveFilterChips, FilterField, FilterSelect, FilterSummary, MoreFiltersButton, type ActiveFilter, type SummaryItem,
+} from "@/components/filters/FilterBits";
+import { downloadCSV } from "@/lib/reportExport";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAddon } from "@/hooks/useAddon";
 import { useToast } from "@/hooks/use-toast";
@@ -69,6 +73,47 @@ function periodRange(p: Period) {
   return { from: localISODate(new Date(now.getFullYear(), now.getMonth(), 1)), to: localISODate() };
 }
 
+/* ---------- filtros extras (lembrados por tela) ---------- */
+const ORIGIN_OPTIONS = [
+  { value: "manual", label: "Lançada à mão" },
+  { value: "fixa", label: "Despesa fixa" },
+  { value: "compra", label: "Compra" },
+  { value: "emprestimo", label: "Empréstimo" },
+  { value: "variavel", label: "Avulsa (já paga)" },
+];
+const ATTACH_OPTIONS = [{ value: "com", label: "Com anexo" }, { value: "sem", label: "Sem anexo" }];
+type Extra = {
+  dueFrom: string; dueTo: string; supplier: string; origin: string;
+  method: string; account: string; minV: string; maxV: string; attach: string;
+};
+const EMPTY_EXTRA: Extra = { dueFrom: "", dueTo: "", supplier: "", origin: "", method: "", account: "", minV: "", maxV: "", attach: "" };
+const STORE_KEY = "filtros:contas-pagar";
+function readStored(): { extra: Extra; cat: string } {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return { extra: EMPTY_EXTRA, cat: "todas" };
+    const o = JSON.parse(raw) || {};
+    const extra = { ...EMPTY_EXTRA };
+    for (const k of Object.keys(EMPTY_EXTRA) as (keyof Extra)[]) if (typeof o[k] === "string") extra[k] = o[k];
+    return { extra, cat: typeof o.cat === "string" ? o.cat : "todas" };
+  } catch { return { extra: EMPTY_EXTRA, cat: "todas" }; }
+}
+/** "1.234,56" / "1234.56" / "50" → número; vazio ou inválido → null. */
+function parseMoney(s: string): number | null {
+  const t = s.trim();
+  if (!t) return null;
+  const n = Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t);
+  return Number.isFinite(n) ? n : null;
+}
+function monthRange(offset: number) {
+  const now = new Date();
+  return {
+    from: localISODate(new Date(now.getFullYear(), now.getMonth() + offset, 1)),
+    to: localISODate(new Date(now.getFullYear(), now.getMonth() + offset + 1, 0)),
+  };
+}
+const csvMoney = (v: number) => v.toFixed(2).replace(".", ",");
+
 export default function Pagar() {
   const addon = useAddon("financeiro");
   if (addon.loading) return <div className="flex items-center justify-center py-20 text-muted-foreground"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Carregando…</div>;
@@ -84,8 +129,14 @@ function PagarInner() {
   const [tab, setTab] = useState<Tab>("aberto");
   const [openFilter, setOpenFilter] = useState<OpenFilter>("todas");
   const [period, setPeriod] = useState<Period>("mes");
-  const [catFilter, setCatFilter] = useState("todas");
+  const [stored] = useState(readStored);
+  const [catFilter, setCatFilter] = useState(stored.cat);
   const [q, setQ] = useState("");
+  const [extra, setExtra] = useState<Extra>(stored.extra);
+  const setX = (patch: Partial<Extra>) => setExtra((prev) => ({ ...prev, ...patch }));
+  useEffect(() => {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify({ ...extra, cat: catFilter })); } catch { /* sem storage */ }
+  }, [extra, catFilter]);
 
   const [rows, setRows] = useState<Payable[]>([]);
   const [ov, setOv] = useState<PayablesOverview | null>(null);
@@ -149,15 +200,29 @@ function PagarInner() {
     fetchExpenseCategories(companyId).then(setCategories);
   }, [companyId]);
 
-  const match = useCallback((p: Payable) => {
+  const minV = parseMoney(extra.minV);
+  const maxV = parseMoney(extra.maxV);
+  /** paid = aba Pagas (forma e conta só valem lá; valor = valor pago). */
+  const match = useCallback((p: Payable, paid: boolean) => {
     if (catFilter !== "todas" && p.category_id !== catFilter) return false;
     const t = q.trim().toLowerCase();
     if (t && !`${p.description} ${p.supplier_name || ""} ${p.document_number || ""}`.toLowerCase().includes(t)) return false;
+    if (extra.dueFrom && p.due_date < extra.dueFrom) return false;
+    if (extra.dueTo && p.due_date > extra.dueTo) return false;
+    if (extra.supplier && (extra.supplier === "__none" ? !!p.supplier_id : p.supplier_id !== extra.supplier)) return false;
+    if (extra.origin && p.source !== extra.origin) return false;
+    if (paid && extra.method && (extra.method === "__none" ? !!p.payment_method : p.payment_method !== extra.method)) return false;
+    if (paid && extra.account && (extra.account === "__none" ? !!p.account_id : p.account_id !== extra.account)) return false;
+    const v = paid ? (p.paid_amount ?? p.amount) : p.amount;
+    if (minV != null && v < minV - 0.004) return false;
+    if (maxV != null && v > maxV + 0.004) return false;
+    if (extra.attach === "com" && !p.attachments_count) return false;
+    if (extra.attach === "sem" && !!p.attachments_count) return false;
     return true;
-  }, [catFilter, q]);
+  }, [catFilter, q, extra, minV, maxV]);
 
   const openRows = useMemo(() => rows.filter((p) => {
-    if (p.status !== "aberta" || !match(p)) return false;
+    if (p.status !== "aberta" || !match(p, false)) return false;
     const d = daysUntil(p.due_date);
     if (openFilter === "vencidas") return d < 0;
     if (openFilter === "hoje") return d === 0;
@@ -165,14 +230,133 @@ function PagarInner() {
     return true;
   }).sort((a, b) => a.due_date.localeCompare(b.due_date)), [rows, match, openFilter]);
 
-  const paidRows = useMemo(() => rows.filter((p) => p.status === "paga" && match(p))
+  const paidRows = useMemo(() => rows.filter((p) => p.status === "paga" && match(p, true))
     .sort((a, b) => (b.paid_at || "").localeCompare(a.paid_at || "")), [rows, match]);
   const paidTotal = paidRows.reduce((s, p) => s + (p.paid_amount ?? p.amount), 0);
   const openCount = rows.filter((p) => p.status === "aberta").length;
 
-  const selRows = rows.filter((p) => selected.has(p.id));
+  // seleção em lote só vale para o que está na tela
+  useEffect(() => {
+    setSelected((prev) => {
+      if (!prev.size) return prev;
+      const vis = new Set(openRows.map((p) => p.id));
+      const next = new Set([...prev].filter((id) => vis.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [openRows]);
+  const selRows = openRows.filter((p) => selected.has(p.id));
   const selTotal = selRows.reduce((s, p) => s + p.amount, 0);
   const allSel = openRows.length > 0 && openRows.every((p) => selected.has(p.id));
+
+  /* ---------- opções, etiquetas e resumo dos filtros ---------- */
+  const supplierOptions = useMemo(() => {
+    const m = new Map(suppliers.map((s) => [s.id, s.name]));
+    rows.forEach((p) => { if (p.supplier_id && !m.has(p.supplier_id)) m.set(p.supplier_id, p.supplier_name || "Fornecedor"); });
+    return [
+      ...[...m].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label, "pt-BR")),
+      { value: "__none", label: "Sem fornecedor" },
+    ];
+  }, [suppliers, rows]);
+  const accountOptions = useMemo(() => {
+    const m = new Map(accounts.map((a) => [a.id, a.name]));
+    rows.forEach((p) => { if (p.account_id && !m.has(p.account_id)) m.set(p.account_id, p.account_name || "Conta"); });
+    return [...[...m].map(([value, label]) => ({ value, label })), { value: "__none", label: "Não informada" }];
+  }, [accounts, rows]);
+  const methodOptions = useMemo(() => {
+    const keys = new Set(PAY_METHODS);
+    rows.forEach((p) => { if (p.payment_method) keys.add(p.payment_method); });
+    return [...[...keys].map((k) => ({ value: k, label: METHOD_LABELS[k] || k })), { value: "__none", label: "Não informada" }];
+  }, [rows]);
+  const labelOf = (opts: { value: string; label: string }[], v: string) => opts.find((o) => o.value === v)?.label || v;
+
+  const isPaidTab = tab === "pagas";
+  const activeFilters: ActiveFilter[] = [];
+  if (q.trim()) activeFilters.push({ key: "q", label: `Busca: "${q.trim()}"`, onRemove: () => setQ("") });
+  if (catFilter !== "todas") activeFilters.push({ key: "cat", label: `Categoria: ${categories.find((c) => c.id === catFilter)?.name || "—"}`, onRemove: () => setCatFilter("todas") });
+  if (extra.dueFrom || extra.dueTo) {
+    activeFilters.push({
+      key: "due",
+      label: `Vencimento: ${extra.dueFrom ? fmtDate(extra.dueFrom) : "…"} a ${extra.dueTo ? fmtDate(extra.dueTo) : "…"}`,
+      onRemove: () => setX({ dueFrom: "", dueTo: "" }),
+    });
+  }
+  if (extra.supplier) activeFilters.push({ key: "sup", label: `Fornecedor: ${labelOf(supplierOptions, extra.supplier)}`, onRemove: () => setX({ supplier: "" }) });
+  if (extra.origin) activeFilters.push({ key: "orig", label: `Origem: ${labelOf(ORIGIN_OPTIONS, extra.origin)}`, onRemove: () => setX({ origin: "" }) });
+  if (isPaidTab && extra.method) activeFilters.push({ key: "met", label: `Forma: ${labelOf(methodOptions, extra.method)}`, onRemove: () => setX({ method: "" }) });
+  if (isPaidTab && extra.account) activeFilters.push({ key: "acc", label: `Saiu de: ${labelOf(accountOptions, extra.account)}`, onRemove: () => setX({ account: "" }) });
+  if (minV != null || maxV != null) {
+    activeFilters.push({
+      key: "val",
+      label: minV != null && maxV != null ? `Valor: ${formatBRL(minV)} a ${formatBRL(maxV)}` : minV != null ? `Valor a partir de ${formatBRL(minV)}` : `Valor até ${formatBRL(maxV!)}`,
+      onRemove: () => setX({ minV: "", maxV: "" }),
+    });
+  }
+  if (extra.attach) activeFilters.push({ key: "att", label: extra.attach === "com" ? "Com anexo" : "Sem anexo", onRemove: () => setX({ attach: "" }) });
+  const panelCount = [extra.dueFrom || extra.dueTo, extra.supplier, extra.origin, isPaidTab && extra.method, isPaidTab && extra.account,
+    minV != null || maxV != null, extra.attach].filter(Boolean).length;
+  function clearFilters() {
+    setQ(""); setCatFilter("todas"); setExtra(EMPTY_EXTRA); setOpenFilter("todas");
+  }
+
+  const summary = useMemo<SummaryItem[]>(() => {
+    if (tab === "aberto") {
+      let total = 0, overdue = 0, upcoming = 0;
+      openRows.forEach((p) => { total += p.amount; if (daysUntil(p.due_date) < 0) overdue += p.amount; else upcoming += p.amount; });
+      return [
+        { label: "Contas", value: String(openRows.length) },
+        { label: "Total", value: formatBRL(total) },
+        { label: "Vencido", value: formatBRL(overdue), tone: overdue > 0 ? "red" : "muted" },
+        { label: "A vencer", value: formatBRL(upcoming) },
+      ];
+    }
+    let gross = 0, interest = 0, discount = 0;
+    paidRows.forEach((p) => {
+      gross += p.amount;
+      const d = Math.round(((p.paid_amount ?? p.amount) - p.amount) * 100) / 100;
+      if (d > 0) interest += d; else discount -= d;
+    });
+    return [
+      { label: "Pagamentos", value: String(paidRows.length) },
+      { label: "Valor das contas", value: formatBRL(gross) },
+      { label: "Total pago", value: formatBRL(paidTotal), tone: "emerald" },
+      { label: "Juros", value: formatBRL(interest), tone: interest > 0 ? "red" : "muted" },
+      { label: "Descontos", value: formatBRL(discount), tone: discount > 0 ? "emerald" : "muted" },
+    ];
+  }, [tab, openRows, paidRows, paidTotal]);
+
+  function exportCSV() {
+    const today = localISODate();
+    const originLabel = (p: Payable) => labelOf(ORIGIN_OPTIONS, p.source);
+    if (tab === "aberto") {
+      downloadCSV(`contas-a-pagar_em-aberto_${today}`, [
+        { key: "due", label: "Vencimento" }, { key: "desc", label: "Descrição" }, { key: "supplier", label: "Fornecedor" },
+        { key: "cat", label: "Categoria" }, { key: "origin", label: "Origem" }, { key: "doc", label: "Documento" },
+        { key: "amount", label: "Valor" }, { key: "situation", label: "Situação" }, { key: "att", label: "Anexos" },
+      ], openRows.map((p) => {
+        const d = daysUntil(p.due_date);
+        return {
+          due: fmtDate(p.due_date), desc: p.description, supplier: p.supplier_name || "", cat: p.category_name || "",
+          origin: originLabel(p), doc: p.document_number || "", amount: csvMoney(p.amount),
+          situation: d < 0 ? `vencida há ${-d} dia(s)` : d === 0 ? "vence hoje" : `vence em ${d} dia(s)`,
+          att: p.attachments_count || 0,
+        };
+      }));
+      return;
+    }
+    downloadCSV(`contas-pagas_${today}`, [
+      { key: "paid", label: "Pago em" }, { key: "due", label: "Vencimento" }, { key: "desc", label: "Descrição" },
+      { key: "supplier", label: "Fornecedor" }, { key: "cat", label: "Categoria" }, { key: "origin", label: "Origem" },
+      { key: "method", label: "Forma" }, { key: "account", label: "Saiu de" }, { key: "amount", label: "Valor" },
+      { key: "paidAmount", label: "Pago" }, { key: "diff", label: "Juros (+) / desconto (-)" }, { key: "att", label: "Anexos" },
+    ], paidRows.map((p) => ({
+      paid: p.paid_at ? new Date(p.paid_at).toLocaleDateString("pt-BR") : "", due: fmtDate(p.due_date), desc: p.description,
+      supplier: p.supplier_name || "", cat: p.category_name || "", origin: originLabel(p),
+      method: p.payment_method ? METHOD_LABELS[p.payment_method] || p.payment_method : "", account: p.account_name || "",
+      amount: csvMoney(p.amount), paidAmount: csvMoney(p.paid_amount ?? p.amount),
+      diff: csvMoney(Math.round(((p.paid_amount ?? p.amount) - p.amount) * 100) / 100), att: p.attachments_count || 0,
+    })));
+  }
+  const listLen = tab === "aberto" ? openRows.length : paidRows.length;
 
   /* ---------- nova / editar ---------- */
   function openNew() {
@@ -337,16 +521,64 @@ function PagarInner() {
           <option value="todas">Todas as categorias</option>
           {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
+        <MoreFiltersButton count={panelCount}>
+          <FilterField label="Vencimento">
+            <div className="grid grid-cols-2 gap-2">
+              <Input type="date" value={extra.dueFrom} onChange={(e) => setX({ dueFrom: e.target.value })} className="h-8 text-xs" aria-label="Vencimento de" />
+              <Input type="date" value={extra.dueTo} onChange={(e) => setX({ dueTo: e.target.value })} className="h-8 text-xs" aria-label="Vencimento até" />
+            </div>
+            <div className="flex gap-3 pt-0.5 text-xs">
+              <button type="button" className="text-primary hover:underline" onClick={() => { const r = monthRange(0); setX({ dueFrom: r.from, dueTo: r.to }); }}>Este mês</button>
+              <button type="button" className="text-primary hover:underline" onClick={() => { const r = monthRange(1); setX({ dueFrom: r.from, dueTo: r.to }); }}>Próximo mês</button>
+              {(extra.dueFrom || extra.dueTo) && <button type="button" className="text-muted-foreground hover:underline" onClick={() => setX({ dueFrom: "", dueTo: "" })}>Qualquer data</button>}
+            </div>
+          </FilterField>
+          <FilterField label="Fornecedor">
+            <FilterSelect value={extra.supplier} onChange={(v) => setX({ supplier: v })} options={supplierOptions} />
+          </FilterField>
+          <FilterField label="Origem">
+            <FilterSelect value={extra.origin} onChange={(v) => setX({ origin: v })} options={tab === "pagas" ? ORIGIN_OPTIONS : ORIGIN_OPTIONS.filter((o) => o.value !== "variavel")} placeholder="Todas" />
+          </FilterField>
+          {tab === "pagas" && (
+            <div className="grid grid-cols-2 gap-2">
+              <FilterField label="Forma">
+                <FilterSelect value={extra.method} onChange={(v) => setX({ method: v })} options={methodOptions} placeholder="Todas" />
+              </FilterField>
+              <FilterField label="Saiu de">
+                <FilterSelect value={extra.account} onChange={(v) => setX({ account: v })} options={accountOptions} placeholder="Todas" />
+              </FilterField>
+            </div>
+          )}
+          <FilterField label={tab === "pagas" ? "Valor pago (R$)" : "Valor (R$)"}>
+            <div className="grid grid-cols-2 gap-2">
+              <Input inputMode="decimal" value={extra.minV} onChange={(e) => setX({ minV: e.target.value })} placeholder="Mínimo" className="h-8 text-xs" aria-label="Valor mínimo" />
+              <Input inputMode="decimal" value={extra.maxV} onChange={(e) => setX({ maxV: e.target.value })} placeholder="Máximo" className="h-8 text-xs" aria-label="Valor máximo" />
+            </div>
+          </FilterField>
+          <FilterField label="Anexo">
+            <FilterSelect value={extra.attach} onChange={(v) => setX({ attach: v })} options={ATTACH_OPTIONS} />
+          </FilterField>
+        </MoreFiltersButton>
+        <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" onClick={exportCSV} disabled={loading || !!error || listLen === 0}>
+          <Download className="h-3.5 w-3.5" /> Exportar CSV
+        </Button>
         <div className="relative ml-auto w-full sm:w-64">
           <Search className="pointer-events-none absolute left-2.5 top-2 h-4 w-4 text-muted-foreground" />
           <Input id="pay-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Descrição, fornecedor ou documento" className="h-8 pl-8 text-sm" />
         </div>
       </div>}
 
-      {tab === "aberto" && selected.size > 0 && (
+      {tab !== "emprestimos" && (activeFilters.length > 0 || (!loading && !error)) && (
+        <div className="space-y-2">
+          <ActiveFilterChips filters={activeFilters} onClearAll={clearFilters} />
+          {!loading && !error && <FilterSummary items={summary} />}
+        </div>
+      )}
+
+      {tab === "aberto" && selRows.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-[10px] border border-primary/40 bg-accent/40 px-4 py-2.5 text-sm">
-          <span><strong>{selected.size}</strong> selecionada{selected.size > 1 ? "s" : ""} · <strong className="num">{formatBRL(selTotal)}</strong></span>
-          <Button size="sm" className="ml-auto" onClick={() => openPay([...selected])}><CheckCircle2 className="mr-1.5 h-4 w-4" /> Pagar selecionadas</Button>
+          <span><strong>{selRows.length}</strong> selecionada{selRows.length > 1 ? "s" : ""} · <strong className="num">{formatBRL(selTotal)}</strong></span>
+          <Button size="sm" className="ml-auto" onClick={() => openPay(selRows.map((p) => p.id))}><CheckCircle2 className="mr-1.5 h-4 w-4" /> Pagar selecionadas</Button>
           <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Limpar</Button>
         </div>
       )}
@@ -404,7 +636,7 @@ function PagarInner() {
             </Table>
           )
         ) : paidRows.length === 0 ? (
-          <div className="px-6 py-14 text-center text-sm text-muted-foreground">Nenhum pagamento nesse período.</div>
+          <div className="px-6 py-14 text-center text-sm text-muted-foreground">{activeFilters.length ? "Nenhum pagamento com esses filtros." : "Nenhum pagamento nesse período."}</div>
         ) : (
           <Table>
             <TableHeader>

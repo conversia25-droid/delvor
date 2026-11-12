@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   BarChart3, Loader2, TrendingUp, Receipt, Users, Package,
   Percent, Calendar, RefreshCw, Trophy, Wrench, FileDown, FileSpreadsheet,
-  AlertTriangle, UserRound, CheckCircle2, Wallet, HandCoins, CalendarClock,
+  AlertTriangle, UserRound, CheckCircle2, Wallet, HandCoins, CalendarClock, Search,
 } from "lucide-react";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -20,10 +20,82 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { formatBRL } from "@/lib/formatters";
-import { OS_STATUS_LABELS } from "@/types/delvor";
+import { OS_STATUS_LABELS, SALE_STATUS_LABELS } from "@/types/delvor";
 import { downloadCSV, downloadReportPDF, type PdfSection } from "@/lib/reportExport";
 import { loadCompanyHeader, imageToDataUrl } from "@/lib/companyInfo";
 import { fetchReceivedSummary } from "@/lib/receivables";
+import {
+  ActiveFilterChips, FilterField, FilterSelect, MoreFiltersButton, type ActiveFilter,
+} from "@/components/filters/FilterBits";
+
+/* ====================================================================
+   FILTROS — helpers comuns das abas
+==================================================================== */
+
+/** "1.234,56" / "1234.5" / "1.000" → número; vazio/inválido → null. */
+function parseMoney(v: string): number | null {
+  const t = v.trim().replace(/^R\$\s*/i, "");
+  if (!t) return null;
+  let n: number;
+  if (t.includes(",")) n = Number(t.replace(/\./g, "").replace(",", "."));
+  else if (/^\d{1,3}(\.\d{3})+$/.test(t)) n = Number(t.replace(/\./g, ""));
+  else n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Texto sem acento e minúsculo, pra busca. */
+function norm(s: unknown): string {
+  return String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+/** Valor dentro da faixa (limites vazios não filtram). */
+function inRange(v: number, min: string, max: string) {
+  const lo = parseMoney(min), hi = parseMoney(max);
+  if (lo != null && v < lo) return false;
+  if (hi != null && v > hi) return false;
+  return true;
+}
+
+/** Etiqueta da faixa de valor, ou null se não houver faixa. */
+function rangeLabel(min: string, max: string): string | null {
+  const lo = parseMoney(min), hi = parseMoney(max);
+  if (lo == null && hi == null) return null;
+  if (lo != null && hi != null) return `Valor: ${formatBRL(lo)} a ${formatBRL(hi)}`;
+  if (lo != null) return `Valor: a partir de ${formatBRL(lo)}`;
+  return `Valor: até ${formatBRL(hi as number)}`;
+}
+
+function ValueRangeFields({ min, max, onMin, onMax }: {
+  min: string; max: string; onMin: (v: string) => void; onMax: (v: string) => void;
+}) {
+  const cls = "h-8 w-full rounded-md border bg-background px-2 text-xs";
+  return (
+    <div className="flex items-center gap-1.5">
+      <input inputMode="decimal" placeholder="de R$" value={min} onChange={(e) => onMin(e.target.value)} className={cls} />
+      <span className="text-xs text-muted-foreground">até</span>
+      <input inputMode="decimal" placeholder="até R$" value={max} onChange={(e) => onMax(e.target.value)} className={cls} />
+    </div>
+  );
+}
+
+function SearchBox({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
+  return (
+    <div className="relative">
+      <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="h-8 w-56 rounded-md border bg-background pl-7 pr-2 text-xs"
+      />
+    </div>
+  );
+}
+
+/** Subtítulo do PDF: partes fixas + etiquetas dos filtros ativos. */
+function pdfSubtitle(parts: (string | null | false | undefined)[], filters: ActiveFilter[]) {
+  return [...parts.filter(Boolean), ...filters.map((f) => f.label)].join("  ·  ");
+}
 
 /* ====================================================================
    PERÍODO — helpers + componente de filtro
@@ -192,6 +264,10 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   outro:             "Outro",
 };
 
+function saleStatusLabel(s: string) {
+  return (SALE_STATUS_LABELS as any)[s]?.label || s;
+}
+
 function SalesReport() {
   const { user } = useAuth();
   const companyId = user?.company_id;
@@ -204,6 +280,13 @@ function SalesReport() {
   const [sellerNames, setSellerNames] = useState<Record<string, string>>({});
   const [custNames, setCustNames] = useState<Record<string, string>>({});
   const [sellerFilter, setSellerFilter] = useState("all");
+  /* filtros extras (painel "Filtros") */
+  const [custFilter, setCustFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState(""); // "pdv" | "manual"
+  const [methodFilter, setMethodFilter] = useState("");
+  const [minValue, setMinValue] = useState("");
+  const [maxValue, setMaxValue] = useState("");
 
   /* Recebido no período pela DATA DO RECEBIMENTO (baixa de hoje de venda antiga
      entra hoje). Sem acesso ao financeiro a RPC recusa e o card mostra "—". */
@@ -236,7 +319,7 @@ function SalesReport() {
     try {
       const { data: salesData, error } = await supabase
         .from("sales" as any)
-        .select("id, number, seller_id, customer_id, total, commission_amount, status, issue_date")
+        .select("id, number, seller_id, customer_id, total, commission_amount, status, issue_date, source")
         .eq("company_id", companyId)
         .in("status", COUNTED_SALE)
         .is("hidden_at", null)
@@ -256,8 +339,21 @@ function SalesReport() {
         setItems((it as any[]) || []);
       } else setItems([]);
 
-      // nomes dos clientes das vendas
-      const custIds = Array.from(new Set(rows.map((s) => s.customer_id).filter(Boolean)));
+      // Vendas com pagamentos pendentes no período (qualquer status ativo).
+      // Excluímos cancelado/perdido — pendências ali não fazem sentido.
+      const { data: pend } = await supabase
+        .from("sales" as any)
+        .select("id, number, seller_id, customer_id, total, status, issue_date, source, sale_payments ( status, amount, method, due_date )")
+        .eq("company_id", companyId)
+        .not("status", "in", "(cancelado,perdido)")
+        .is("hidden_at", null)
+        .gte("issue_date", range.start)
+        .lte("issue_date", range.end)
+        .limit(5000);
+      const pendRows = (pend as any[]) || [];
+
+      // nomes dos clientes das vendas (contadas + com pendência)
+      const custIds = Array.from(new Set([...rows, ...pendRows].map((s) => s.customer_id).filter(Boolean)));
       if (custIds.length) {
         const { data: cs } = await supabase
           .from("customers").select("id, name").in("id", custIds);
@@ -271,19 +367,7 @@ function SalesReport() {
       const nm: Record<string, string> = {};
       for (const p of (profs as any[]) || []) nm[p.id] = p.nome || "—";
       setSellerNames(nm);
-
-      // Vendas com pagamentos pendentes no período (qualquer status ativo).
-      // Excluímos cancelado/perdido — pendências ali não fazem sentido.
-      const { data: pend } = await supabase
-        .from("sales" as any)
-        .select("id, number, seller_id, customer_id, total, status, issue_date, sale_payments ( status, amount, method, due_date )")
-        .eq("company_id", companyId)
-        .not("status", "in", "(cancelado,perdido)")
-        .is("hidden_at", null)
-        .gte("issue_date", range.start)
-        .lte("issue_date", range.end)
-        .limit(5000);
-      setPendingSalesRaw((pend as any[]) || []);
+      setPendingSalesRaw(pendRows);
     } catch (e: any) {
       toast({ title: "Erro", description: e?.message, variant: "destructive" });
     } finally { setLoading(false); }
@@ -298,16 +382,78 @@ function SalesReport() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [sales, sellerNames]);
 
-  /* aplica o filtro de vendedor */
-  const filteredSales = useMemo(
-    () => (sellerFilter === "all" ? sales : sales.filter((s) => s.seller_id === sellerFilter)),
-    [sales, sellerFilter]
-  );
+  /* formas de pagamento de cada venda (parcelas não canceladas/estornadas) */
+  const methodsBySale = useMemo(() => {
+    const m = new Map<string, Set<string>>();
+    for (const s of pendingSalesRaw) {
+      const set = new Set<string>();
+      for (const p of (s.sale_payments || []) as any[]) {
+        if (p.status === "cancelado" || p.status === "estornado") continue;
+        set.add(p.method || "outro");
+      }
+      m.set(s.id, set);
+    }
+    return m;
+  }, [pendingSalesRaw]);
+
+  /* opções dos filtros extras (só o que aparece no período) */
+  const customerOptions = useMemo(() => {
+    const ids = new Set([...sales, ...pendingSalesRaw].map((s) => s.customer_id).filter(Boolean));
+    return Array.from(ids)
+      .map((id) => ({ value: id as string, label: custNames[id as string] || "—" }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [sales, pendingSalesRaw, custNames]);
+  const statusOptions = useMemo(() => {
+    const st = new Set([...sales, ...pendingSalesRaw].map((s) => s.status).filter(Boolean));
+    return Array.from(st).map((s) => ({ value: s as string, label: saleStatusLabel(s as string) }));
+  }, [sales, pendingSalesRaw]);
+  const methodOptions = useMemo(() => {
+    const st = new Set<string>();
+    methodsBySale.forEach((set) => set.forEach((m) => st.add(m)));
+    return Array.from(st)
+      .map((m) => ({ value: m, label: PAYMENT_METHOD_LABELS[m] || m }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [methodsBySale]);
+
+  /* aplica todos os filtros numa venda */
+  const matchSale = useMemo(() => (s: any) => {
+    if (sellerFilter !== "all" && s.seller_id !== sellerFilter) return false;
+    if (custFilter && s.customer_id !== custFilter) return false;
+    if (statusFilter && s.status !== statusFilter) return false;
+    if (sourceFilter === "pdv" && s.source !== "pdv") return false;
+    if (sourceFilter === "manual" && s.source === "pdv") return false;
+    if (methodFilter && !methodsBySale.get(s.id)?.has(methodFilter)) return false;
+    if (!inRange(Number(s.total || 0), minValue, maxValue)) return false;
+    return true;
+  }, [sellerFilter, custFilter, statusFilter, sourceFilter, methodFilter, methodsBySale, minValue, maxValue]);
+
+  /* etiquetas dos filtros ativos (também vão pro subtítulo do PDF) */
+  const extraFilters = useMemo(() => {
+    const f: ActiveFilter[] = [];
+    if (custFilter) f.push({ key: "cust", label: `Cliente: ${custNames[custFilter] || "—"}`, onRemove: () => setCustFilter("") });
+    if (statusFilter) f.push({ key: "status", label: `Situação: ${saleStatusLabel(statusFilter)}`, onRemove: () => setStatusFilter("") });
+    if (sourceFilter) f.push({ key: "source", label: `Origem: ${sourceFilter === "pdv" ? "PDV" : "Manual"}`, onRemove: () => setSourceFilter("") });
+    if (methodFilter) f.push({ key: "method", label: `Pagamento: ${PAYMENT_METHOD_LABELS[methodFilter] || methodFilter}`, onRemove: () => setMethodFilter("") });
+    const rl = rangeLabel(minValue, maxValue);
+    if (rl) f.push({ key: "value", label: rl, onRemove: () => { setMinValue(""); setMaxValue(""); } });
+    return f;
+  }, [custFilter, statusFilter, sourceFilter, methodFilter, minValue, maxValue, custNames]);
+  const activeFilters = useMemo(() => {
+    const f: ActiveFilter[] = [];
+    if (sellerFilter !== "all") f.push({ key: "seller", label: `Vendedor: ${sellerNames[sellerFilter] || "—"}`, onRemove: () => setSellerFilter("all") });
+    return [...f, ...extraFilters];
+  }, [sellerFilter, sellerNames, extraFilters]);
+  function clearFilters() {
+    setSellerFilter("all"); setCustFilter(""); setStatusFilter(""); setSourceFilter("");
+    setMethodFilter(""); setMinValue(""); setMaxValue("");
+  }
+
+  const filteredSales = useMemo(() => sales.filter(matchSale), [sales, matchSale]);
   const filteredItems = useMemo(() => {
-    if (sellerFilter === "all") return items;
+    if (!activeFilters.length) return items;
     const ids = new Set(filteredSales.map((s) => s.id));
     return items.filter((it) => ids.has(it.sale_id));
-  }, [items, filteredSales, sellerFilter]);
+  }, [items, filteredSales, activeFilters.length]);
 
   const totals = useMemo(() => {
     const revenue = filteredSales.reduce((s, x) => s + (x.total || 0), 0);
@@ -359,11 +505,9 @@ function SalesReport() {
     return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
   }, [filteredSales, custNames]);
 
-  /* Vendas com pendência — aplica filtro de vendedor + computa valor/vencimento. */
+  /* Vendas com pendência — aplica os filtros + computa valor/vencimento. */
   const pendingSales = useMemo(() => {
-    const source = sellerFilter === "all"
-      ? pendingSalesRaw
-      : pendingSalesRaw.filter((s) => s.seller_id === sellerFilter);
+    const source = pendingSalesRaw.filter(matchSale);
     const today = new Date().toISOString().slice(0, 10);
     return source
       .map((s) => {
@@ -403,7 +547,7 @@ function SalesReport() {
         if (b.nextDue) return 1;
         return 0;
       }) as any[];
-  }, [pendingSalesRaw, sellerFilter, custNames, sellerNames]);
+  }, [pendingSalesRaw, matchSale, custNames, sellerNames]);
 
   const pendingTotals = useMemo(() => {
     const amount = pendingSales.reduce((s, x) => s + x.pendingAmount, 0);
@@ -415,14 +559,13 @@ function SalesReport() {
      Reutiliza `pendingSalesRaw` porque ela já traz todas as vendas ativas
      do período com todos os sale_payments. Filtramos por status=pago. */
   const paymentsByMethod = useMemo(() => {
-    const source = sellerFilter === "all"
-      ? pendingSalesRaw
-      : pendingSalesRaw.filter((s) => s.seller_id === sellerFilter);
+    const source = pendingSalesRaw.filter(matchSale);
     const map = new Map<string, { method: string; label: string; amount: number; count: number }>();
     let total = 0;
     for (const s of source) {
       for (const p of (s.sale_payments || []) as any[]) {
         if (p.status !== "pago") continue;
+        if (methodFilter && (p.method || "outro") !== methodFilter) continue;
         const amt = Number(p.amount || 0);
         if (amt <= 0) continue;
         const key = p.method || "outro";
@@ -442,7 +585,7 @@ function SalesReport() {
       rows: Array.from(map.values()).sort((a, b) => b.amount - a.amount),
       total,
     };
-  }, [pendingSalesRaw, sellerFilter]);
+  }, [pendingSalesRaw, matchSale, methodFilter]);
 
   /* lista venda a venda (mais recentes primeiro) */
   const detailedSales = useMemo(() => {
@@ -456,6 +599,8 @@ function SalesReport() {
         seller: s.seller_id ? (sellerNames[s.seller_id] || "—") : "Sem vendedor",
         total: Number(s.total || 0),
         commission: Number(s.commission_amount || 0),
+        status: saleStatusLabel(s.status),
+        origin: s.source === "pdv" ? "PDV" : "Manual",
       }));
   }, [filteredSales, custNames, sellerNames]);
 
@@ -476,6 +621,8 @@ function SalesReport() {
         { key: "date", label: "Data" },
         { key: "customer", label: "Cliente" },
         { key: "seller", label: "Vendedor" },
+        { key: "status", label: "Situacao" },
+        { key: "origin", label: "Origem" },
         { key: "total", label: "Total" },
         { key: "commission", label: "Comissao" },
       ],
@@ -484,6 +631,8 @@ function SalesReport() {
         date: fmtDate(s.date),
         customer: s.customer,
         seller: s.seller,
+        status: s.status,
+        origin: s.origin,
         total: s.total.toFixed(2).replace(".", ","),
         commission: s.commission.toFixed(2).replace(".", ","),
       }))
@@ -632,7 +781,7 @@ function SalesReport() {
     const { companyName, logoDataUrl } = await loadReportBranding(companyId);
     downloadReportPDF({
       title: "Relatório de Vendas",
-      subtitle: `Período: ${periodLabel}  ·  Vendedor: ${sellerLabel}`,
+      subtitle: pdfSubtitle([`Período: ${periodLabel}`, `Vendedor: ${sellerLabel}`], extraFilters),
       companyName,
       logoDataUrl,
       filename: `vendas_${range.start}_${range.end}.pdf`,
@@ -669,16 +818,30 @@ function SalesReport() {
             <option key={s.id} value={s.id}>{s.name}</option>
           ))}
         </select>
-        {sellerFilter !== "all" && (
-          <button
-            type="button"
-            onClick={() => setSellerFilter("all")}
-            className="text-xs text-blue-700 dark:text-blue-400 hover:underline"
-          >
-            limpar filtro
-          </button>
-        )}
+        <MoreFiltersButton count={extraFilters.length}>
+          <FilterField label="Cliente">
+            <FilterSelect value={custFilter} onChange={setCustFilter} options={customerOptions} />
+          </FilterField>
+          <FilterField label="Situação da venda">
+            <FilterSelect value={statusFilter} onChange={setStatusFilter} options={statusOptions} placeholder="Todas" />
+          </FilterField>
+          <FilterField label="Forma de pagamento">
+            <FilterSelect value={methodFilter} onChange={setMethodFilter} options={methodOptions} placeholder="Todas" />
+          </FilterField>
+          <FilterField label="Origem">
+            <FilterSelect
+              value={sourceFilter}
+              onChange={setSourceFilter}
+              options={[{ value: "pdv", label: "PDV" }, { value: "manual", label: "Manual" }]}
+              placeholder="Todas"
+            />
+          </FilterField>
+          <FilterField label="Valor da venda">
+            <ValueRangeFields min={minValue} max={maxValue} onMin={setMinValue} onMax={setMaxValue} />
+          </FilterField>
+        </MoreFiltersButton>
       </div>
+      <ActiveFilterChips filters={activeFilters} onClearAll={clearFilters} />
 
       {/* o que incluir no relatório (escolha antes de exportar) */}
       <div className="flex flex-wrap items-center gap-2">
@@ -717,7 +880,9 @@ function SalesReport() {
               label="Recebido"
               value={received ? formatBRL(received.received_total) : "—"}
               tone="emerald"
-              hint={received && received.fee_total > 0 ? `taxas ${formatBRL(received.fee_total)}` : "pela data do recebimento"}
+              hint={extraFilters.length
+                ? "só segue o filtro de vendedor"
+                : received && received.fee_total > 0 ? `taxas ${formatBRL(received.fee_total)}` : "pela data do recebimento"}
             />
             <Kpi
               icon={CalendarClock}
@@ -1066,12 +1231,36 @@ function CommissionsReport() {
       .sort((a, b) => b.pending - a.pending || b.total - a.total);
   }, [sales, profById]);
 
+  /* filtros: vendedor + só quem tem comissão a pagar */
+  const [sellerFilter, setSellerFilter] = useState("");
+  const [onlyPending, setOnlyPending] = useState(false);
+  const sellerOptions = useMemo(
+    () => [...bySeller].sort((a, b) => a.name.localeCompare(b.name)).map((s) => ({ value: s.id, label: s.name })),
+    [bySeller]
+  );
+  const activeFilters = useMemo(() => {
+    const f: ActiveFilter[] = [];
+    if (sellerFilter) f.push({ key: "seller", label: `Vendedor: ${profById.get(sellerFilter)?.nome || "—"}`, onRemove: () => setSellerFilter("") });
+    if (onlyPending) f.push({ key: "pending", label: "Só com comissão a pagar", onRemove: () => setOnlyPending(false) });
+    return f;
+  }, [sellerFilter, onlyPending, profById]);
+  function clearFilters() { setSellerFilter(""); setOnlyPending(false); }
+
+  const filteredSellers = useMemo(
+    () => bySeller.filter((s) => (!sellerFilter || s.id === sellerFilter) && (!onlyPending || s.pending > 0.005)),
+    [bySeller, sellerFilter, onlyPending]
+  );
+  const filteredPayouts = useMemo(
+    () => (sellerFilter ? payouts.filter((p) => p.seller_id === sellerFilter) : payouts),
+    [payouts, sellerFilter]
+  );
+
   const totals = useMemo(
-    () => bySeller.reduce(
+    () => filteredSellers.reduce(
       (a, s) => ({ total: a.total + s.total, paid: a.paid + s.paid, pending: a.pending + s.pending }),
       { total: 0, paid: 0, pending: 0 }
     ),
-    [bySeller]
+    [filteredSellers]
   );
 
   const periodLabel = `${new Date(range.start + "T12:00").toLocaleDateString("pt-BR")} a ${new Date(range.end + "T12:00").toLocaleDateString("pt-BR")}`;
@@ -1118,7 +1307,7 @@ function CommissionsReport() {
         { key: "paid", label: "Pago" },
         { key: "pending", label: "A pagar" },
       ],
-      bySeller.map((s) => ({
+      filteredSellers.map((s) => ({
         name: s.name,
         rate: String(s.rate).replace(".", ","),
         count: s.count,
@@ -1132,7 +1321,7 @@ function CommissionsReport() {
     const { companyName, logoDataUrl } = await loadReportBranding(companyId);
     downloadReportPDF({
       title: "Relatório de Comissões",
-      subtitle: `Período: ${periodLabel}`,
+      subtitle: pdfSubtitle([`Período: ${periodLabel}`], activeFilters),
       companyName,
       logoDataUrl,
       filename: `comissoes_${range.start}_${range.end}.pdf`,
@@ -1146,7 +1335,7 @@ function CommissionsReport() {
           { header: "Pago", dataKey: "paid", align: "right" },
           { header: "A pagar", dataKey: "pending", align: "right" },
         ],
-        rows: bySeller.map((s) => ({
+        rows: filteredSellers.map((s) => ({
           name: s.name, rate: `${s.rate}%`, count: s.count,
           total: formatBRL(s.total), paid: formatBRL(s.paid), pending: formatBRL(s.pending),
         })),
@@ -1180,6 +1369,19 @@ function CommissionsReport() {
         onCustom={(s, e) => { setPreset("custom"); setRange({ start: s, end: e }); }}
       />
 
+      <div className="flex flex-wrap items-center gap-2">
+        <MoreFiltersButton count={activeFilters.length}>
+          <FilterField label="Vendedor">
+            <FilterSelect value={sellerFilter} onChange={setSellerFilter} options={sellerOptions} />
+          </FilterField>
+          <label className="flex cursor-pointer items-center gap-2 text-xs">
+            <input type="checkbox" checked={onlyPending} onChange={(e) => setOnlyPending(e.target.checked)} />
+            Só com comissão a pagar
+          </label>
+        </MoreFiltersButton>
+        <ActiveFilterChips filters={activeFilters} onClearAll={clearFilters} />
+      </div>
+
       {loading ? <Loading /> : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -1200,8 +1402,8 @@ function CommissionsReport() {
                 <TableHead className="w-32" />
               </TableRow></TableHeader>
               <TableBody>
-                {bySeller.length === 0 && <EmptyRow cols={7} />}
-                {bySeller.map((s) => (
+                {filteredSellers.length === 0 && <EmptyRow cols={7} />}
+                {filteredSellers.map((s) => (
                   <TableRow key={s.id}>
                     <TableCell className="font-medium">{s.name}</TableCell>
                     <TableCell className="text-right text-muted-foreground">{s.rate}%</TableCell>
@@ -1228,7 +1430,7 @@ function CommissionsReport() {
             </Table>
           </ReportCard>
 
-          <ReportCard icon={Receipt} title={`Pagamentos de comissão (${payouts.length})`}>
+          <ReportCard icon={Receipt} title={`Pagamentos de comissão (${filteredPayouts.length})`}>
             <Table>
               <TableHeader><TableRow>
                 <TableHead className="w-36">Data</TableHead>
@@ -1238,8 +1440,8 @@ function CommissionsReport() {
                 <TableHead className="text-right">Valor pago</TableHead>
               </TableRow></TableHeader>
               <TableBody>
-                {payouts.length === 0 && <EmptyRow cols={5} />}
-                {payouts.map((p) => (
+                {filteredPayouts.length === 0 && <EmptyRow cols={5} />}
+                {filteredPayouts.map((p) => (
                   <TableRow key={p.id}>
                     <TableCell className="text-xs text-muted-foreground">
                       {new Date(p.paid_at).toLocaleString("pt-BR")}
@@ -1308,18 +1510,34 @@ function StockReport() {
   const [products, setProducts] = useState<any[]>([]);
   const [filterType, setFilterType] = useState<string>("all");
   const [onlyCritical, setOnlyCritical] = useState(false);
+  const [search, setSearch] = useState("");
+  const [catFilter, setCatFilter] = useState("");
+  const [brandFilter, setBrandFilter] = useState("");
+  const [supFilter, setSupFilter] = useState("");
+  const [catNames, setCatNames] = useState<Record<string, string>>({});
+  const [supNames, setSupNames] = useState<Record<string, string>>({});
 
   async function load() {
     if (!companyId) return;
     setLoading(true);
-    const { data } = await supabase
-      .from("products" as any)
-      .select("id, name, sku, type, unit, stock_qty, stock_min, cost_price, sale_price")
-      .eq("company_id", companyId)
-      .is("hidden_at", null)
-      .order("name")
-      .limit(5000);
-    setProducts((data as any[]) || []);
+    const [pr, cr, sr] = await Promise.all([
+      supabase
+        .from("products" as any)
+        .select("id, name, sku, type, unit, stock_qty, stock_min, cost_price, sale_price, category_id, supplier_id, brand")
+        .eq("company_id", companyId)
+        .is("hidden_at", null)
+        .order("name")
+        .limit(5000),
+      supabase.from("product_categories" as any).select("id, name").eq("company_id", companyId),
+      supabase.from("suppliers" as any).select("id, name").eq("company_id", companyId),
+    ]);
+    setProducts((pr.data as any[]) || []);
+    const cm: Record<string, string> = {};
+    for (const c of (cr.data as any[]) || []) cm[c.id] = c.name || "—";
+    setCatNames(cm);
+    const sm: Record<string, string> = {};
+    for (const s of (sr.data as any[]) || []) sm[s.id] = s.name || "—";
+    setSupNames(sm);
     setLoading(false);
   }
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [companyId]);
@@ -1328,13 +1546,50 @@ function StockReport() {
     return Array.from(new Set(products.map((p) => p.type).filter(Boolean)));
   }, [products]);
 
+  /* opções dos filtros extras (só o que existe nos produtos) */
+  const catOptions = useMemo(() => {
+    const ids = Array.from(new Set(products.map((p) => p.category_id).filter(Boolean))) as string[];
+    const opts = ids.map((id) => ({ value: id, label: catNames[id] || "—" })).sort((a, b) => a.label.localeCompare(b.label));
+    return products.some((p) => !p.category_id) ? [...opts, { value: "_none", label: "Sem categoria" }] : opts;
+  }, [products, catNames]);
+  const brandOptions = useMemo(() => {
+    const bs = Array.from(new Set(products.map((p) => (p.brand || "").trim()).filter(Boolean))) as string[];
+    return bs.sort((a, b) => a.localeCompare(b)).map((b) => ({ value: b, label: b }));
+  }, [products]);
+  const supOptions = useMemo(() => {
+    const ids = Array.from(new Set(products.map((p) => p.supplier_id).filter(Boolean))) as string[];
+    const opts = ids.map((id) => ({ value: id, label: supNames[id] || "—" })).sort((a, b) => a.label.localeCompare(b.label));
+    return products.some((p) => !p.supplier_id) ? [...opts, { value: "_none", label: "Sem fornecedor" }] : opts;
+  }, [products, supNames]);
+
   const filtered = useMemo(() => {
+    const q = norm(search.trim());
     return products.filter((p) => {
       if (filterType !== "all" && p.type !== filterType) return false;
       if (onlyCritical && Number(p.stock_qty || 0) > Number(p.stock_min || 0)) return false;
+      if (catFilter && (p.category_id || "_none") !== catFilter) return false;
+      if (supFilter && (p.supplier_id || "_none") !== supFilter) return false;
+      if (brandFilter && (p.brand || "").trim() !== brandFilter) return false;
+      if (q && !norm(`${p.name} ${p.sku || ""}`).includes(q)) return false;
       return true;
     });
-  }, [products, filterType, onlyCritical]);
+  }, [products, filterType, onlyCritical, catFilter, supFilter, brandFilter, search]);
+
+  const extraCount = [catFilter, brandFilter, supFilter].filter(Boolean).length;
+  const activeFilters = useMemo(() => {
+    const f: ActiveFilter[] = [];
+    if (filterType !== "all") f.push({ key: "type", label: `Tipo: ${filterType}`, onRemove: () => setFilterType("all") });
+    if (onlyCritical) f.push({ key: "crit", label: "Só estoque crítico", onRemove: () => setOnlyCritical(false) });
+    if (search.trim()) f.push({ key: "q", label: `Busca: "${search.trim()}"`, onRemove: () => setSearch("") });
+    if (catFilter) f.push({ key: "cat", label: `Categoria: ${catFilter === "_none" ? "Sem categoria" : catNames[catFilter] || "—"}`, onRemove: () => setCatFilter("") });
+    if (brandFilter) f.push({ key: "brand", label: `Marca: ${brandFilter}`, onRemove: () => setBrandFilter("") });
+    if (supFilter) f.push({ key: "sup", label: `Fornecedor: ${supFilter === "_none" ? "Sem fornecedor" : supNames[supFilter] || "—"}`, onRemove: () => setSupFilter("") });
+    return f;
+  }, [filterType, onlyCritical, search, catFilter, brandFilter, supFilter, catNames, supNames]);
+  function clearFilters() {
+    setFilterType("all"); setOnlyCritical(false); setSearch("");
+    setCatFilter(""); setBrandFilter(""); setSupFilter("");
+  }
 
   const stats = useMemo(() => {
     const totalCost = filtered.reduce((s, p) => s + Number(p.stock_qty || 0) * Number(p.cost_price || 0), 0);
@@ -1353,6 +1608,9 @@ function StockReport() {
         unit: p.unit || "UN", qty, min: Number(p.stock_min || 0),
         cost: Number(p.cost_price || 0), sale: Number(p.sale_price || 0),
         valor, status: critico ? "CRÍTICO" : "OK",
+        category: p.category_id ? (catNames[p.category_id] || "") : "",
+        brand: p.brand || "",
+        supplier: p.supplier_id ? (supNames[p.supplier_id] || "") : "",
       };
     });
   }
@@ -1361,7 +1619,9 @@ function StockReport() {
       `estoque_${isoDate(new Date())}`,
       [
         { key: "name", label: "Produto" }, { key: "sku", label: "SKU" },
-        { key: "type", label: "Tipo" }, { key: "unit", label: "Unidade" },
+        { key: "type", label: "Tipo" }, { key: "category", label: "Categoria" },
+        { key: "brand", label: "Marca" }, { key: "supplier", label: "Fornecedor" },
+        { key: "unit", label: "Unidade" },
         { key: "qty", label: "Estoque" }, { key: "min", label: "Minimo" },
         { key: "cost", label: "Custo" }, { key: "sale", label: "Venda" },
         { key: "valor", label: "Valor em estoque" }, { key: "status", label: "Status" },
@@ -1378,7 +1638,7 @@ function StockReport() {
     const { companyName, logoDataUrl } = await loadReportBranding(companyId);
     downloadReportPDF({
       title: "Relatório de Estoque",
-      subtitle: `${filterType === "all" ? "Todos os tipos" : `Tipo: ${filterType}`}${onlyCritical ? "  ·  Apenas estoque crítico" : ""}`,
+      subtitle: activeFilters.length ? pdfSubtitle([], activeFilters) : "Todos os itens",
       companyName,
       logoDataUrl,
       filename: `estoque_${isoDate(new Date())}.pdf`,
@@ -1428,6 +1688,22 @@ function StockReport() {
           <AlertTriangle className="h-3 w-3" /> Só estoque crítico
         </button>
       </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <SearchBox value={search} onChange={setSearch} placeholder="Buscar nome ou SKU" />
+        <MoreFiltersButton count={extraCount}>
+          <FilterField label="Categoria">
+            <FilterSelect value={catFilter} onChange={setCatFilter} options={catOptions} placeholder="Todas" />
+          </FilterField>
+          <FilterField label="Marca">
+            <FilterSelect value={brandFilter} onChange={setBrandFilter} options={brandOptions} placeholder="Todas" />
+          </FilterField>
+          <FilterField label="Fornecedor">
+            <FilterSelect value={supFilter} onChange={setSupFilter} options={supOptions} />
+          </FilterField>
+        </MoreFiltersButton>
+      </div>
+      <ActiveFilterChips filters={activeFilters} onClearAll={clearFilters} />
 
       {loading ? <Loading /> : (
         <>
@@ -1493,18 +1769,24 @@ function OsReport() {
   const [techNames, setTechNames] = useState<Record<string, string>>({});
   const [techFilter, setTechFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [custFilter, setCustFilter] = useState("");
+  /* qual data o período usa: abertura (created_at) ou conclusão (finished_at) */
+  const [dateBase, setDateBase] = useState<"" | "conclusao">("");
+  const [minValue, setMinValue] = useState("");
+  const [maxValue, setMaxValue] = useState("");
 
   async function load() {
     if (!companyId) return;
     setLoading(true);
     try {
+      const dateCol = dateBase === "conclusao" ? "finished_at" : "created_at";
       const { data, error } = await supabase
         .from("service_orders" as any)
-        .select("id, number, status, customer_id, technician_id, total, created_at")
+        .select("id, number, status, customer_id, technician_id, total, created_at, finished_at")
         .eq("company_id", companyId)
-        .gte("created_at", range.start)
-        .lte("created_at", range.end + "T23:59:59")
-        .order("created_at", { ascending: false })
+        .gte(dateCol, range.start)
+        .lte(dateCol, range.end + "T23:59:59")
+        .order(dateCol, { ascending: false })
         .limit(5000);
       if (error) throw error;
       const rows = (data as any[]) || [];
@@ -1528,9 +1810,14 @@ function OsReport() {
       toast({ title: "Erro", description: e?.message, variant: "destructive" });
     } finally { setLoading(false); }
   }
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [companyId, range.start, range.end]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [companyId, range.start, range.end, dateBase]);
 
   /* opções de filtro */
+  const custOptions = useMemo(() => {
+    const ids = Array.from(new Set(orders.map((o) => o.customer_id).filter(Boolean))) as string[];
+    return ids.map((id) => ({ value: id, label: custNames[id] || "—" })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [orders, custNames]);
+
   const techOptions = useMemo(() => {
     const ids = new Set(orders.map((o) => o.technician_id).filter(Boolean));
     return Array.from(ids)
@@ -1550,9 +1837,33 @@ function OsReport() {
       else if (techFilter === "_none") { if (o.technician_id) return false; }
       else if (o.technician_id !== techFilter) return false;
       if (statusFilter !== "all" && o.status !== statusFilter) return false;
+      if (custFilter && o.customer_id !== custFilter) return false;
+      if (!inRange(Number(o.total || 0), minValue, maxValue)) return false;
       return true;
     });
-  }, [orders, techFilter, statusFilter]);
+  }, [orders, techFilter, statusFilter, custFilter, minValue, maxValue]);
+
+  const techLabel =
+    techFilter === "all" ? "Todos"
+    : techFilter === "_none" ? "Não atribuído"
+    : techNames[techFilter] || "—";
+  const extraFilters: ActiveFilter[] = [];
+  if (custFilter) extraFilters.push({ key: "cust", label: `Cliente: ${custNames[custFilter] || "—"}`, onRemove: () => setCustFilter("") });
+  if (dateBase) extraFilters.push({ key: "date", label: "Período pela conclusão", onRemove: () => setDateBase("") });
+  const osRange = rangeLabel(minValue, maxValue);
+  if (osRange) extraFilters.push({ key: "value", label: osRange, onRemove: () => { setMinValue(""); setMaxValue(""); } });
+  const activeFilters: ActiveFilter[] = [
+    ...(techFilter !== "all" ? [{ key: "tech", label: `Técnico: ${techLabel}`, onRemove: () => setTechFilter("all") }] : []),
+    ...(statusFilter !== "all" ? [{ key: "status", label: `Status: ${statusLabel(statusFilter)}`, onRemove: () => setStatusFilter("all") }] : []),
+    ...extraFilters,
+  ];
+  function clearFilters() {
+    setTechFilter("all"); setStatusFilter("all"); setCustFilter(""); setDateBase("");
+    setMinValue(""); setMaxValue("");
+  }
+  function fmtTs(ts: string | null | undefined) {
+    return ts ? new Date(ts).toLocaleDateString("pt-BR") : "—";
+  }
 
   const byStatus = useMemo(() => {
     const m = new Map<string, number>();
@@ -1578,6 +1889,7 @@ function OsReport() {
         { key: "number", label: "OS" }, { key: "cliente", label: "Cliente" },
         { key: "tecnico", label: "Tecnico" }, { key: "status", label: "Status" },
         { key: "total", label: "Total" }, { key: "abertura", label: "Abertura" },
+        { key: "conclusao", label: "Conclusao" },
       ],
       filteredOrders.map((o) => ({
         number: "#" + String(o.number).padStart(6, "0"),
@@ -1586,19 +1898,16 @@ function OsReport() {
         status: statusLabel(o.status),
         total: Number(o.total || 0).toFixed(2).replace(".", ","),
         abertura: new Date(o.created_at).toLocaleDateString("pt-BR"),
+        conclusao: o.finished_at ? new Date(o.finished_at).toLocaleDateString("pt-BR") : "",
       }))
     );
   }
   async function exportPDF() {
-    const techLabel =
-      techFilter === "all" ? "Todos"
-      : techFilter === "_none" ? "Não atribuído"
-      : techNames[techFilter] || "—";
     const stLabel = statusFilter === "all" ? "Todos" : statusLabel(statusFilter);
     const { companyName, logoDataUrl } = await loadReportBranding(companyId);
     downloadReportPDF({
       title: "Relatório de Ordens de Serviço",
-      subtitle: `Período: ${periodLabel}  ·  Técnico: ${techLabel}  ·  Status: ${stLabel}`,
+      subtitle: pdfSubtitle([`Período: ${periodLabel}`, `Técnico: ${techLabel}`, `Status: ${stLabel}`], extraFilters),
       companyName,
       logoDataUrl,
       filename: `os_${range.start}_${range.end}.pdf`,
@@ -1677,16 +1986,26 @@ function OsReport() {
           ))}
         </select>
 
-        {(techFilter !== "all" || statusFilter !== "all") && (
-          <button
-            type="button"
-            onClick={() => { setTechFilter("all"); setStatusFilter("all"); }}
-            className="text-xs text-blue-700 dark:text-blue-400 hover:underline"
-          >
-            limpar filtros
-          </button>
-        )}
+        <MoreFiltersButton count={extraFilters.length}>
+          <FilterField label="Cliente">
+            <FilterSelect value={custFilter} onChange={setCustFilter} options={custOptions} />
+          </FilterField>
+          <FilterField label="Período pela data de">
+            <select
+              value={dateBase}
+              onChange={(e) => setDateBase(e.target.value as "" | "conclusao")}
+              className="h-8 w-full rounded-md border bg-background px-2 text-xs"
+            >
+              <option value="">Abertura</option>
+              <option value="conclusao">Conclusão</option>
+            </select>
+          </FilterField>
+          <FilterField label="Valor da OS">
+            <ValueRangeFields min={minValue} max={maxValue} onMin={setMinValue} onMax={setMaxValue} />
+          </FilterField>
+        </MoreFiltersButton>
       </div>
+      <ActiveFilterChips filters={activeFilters} onClearAll={clearFilters} />
 
       {loading ? <Loading /> : (
         <>
@@ -1719,9 +2038,10 @@ function OsReport() {
                 <TableHead className="w-32">Status</TableHead>
                 <TableHead className="text-right">Total</TableHead>
                 <TableHead className="w-28">Abertura</TableHead>
+                <TableHead className="w-28">Conclusão</TableHead>
               </TableRow></TableHeader>
               <TableBody>
-                {filteredOrders.length === 0 && <EmptyRow cols={6} />}
+                {filteredOrders.length === 0 && <EmptyRow cols={7} />}
                 {filteredOrders.slice(0, 200).map((o) => (
                   <TableRow key={o.id}>
                     <TableCell className="font-mono text-sm">#{String(o.number).padStart(6, "0")}</TableCell>
@@ -1736,6 +2056,7 @@ function OsReport() {
                     <TableCell className="text-xs text-muted-foreground">
                       {new Date(o.created_at).toLocaleDateString("pt-BR")}
                     </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{fmtTs(o.finished_at)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -1802,7 +2123,56 @@ function ExpensesReport() {
   }
   useEffect(() => { load(); }, [range.start, range.end]);
 
-  const visible = useMemo(() => rows.filter((r) => statusFilter === "todas" || r.status === statusFilter), [rows, statusFilter]);
+  /* filtros extras */
+  const [search, setSearch] = useState("");
+  const [catFilter, setCatFilter] = useState("");
+  const [kindFilter, setKindFilter] = useState("");
+  const [supFilter, setSupFilter] = useState("");
+  const [minValue, setMinValue] = useState("");
+  const [maxValue, setMaxValue] = useState("");
+
+  const catOptions = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.category).filter(Boolean))).sort((a, b) => a.localeCompare(b)).map((c) => ({ value: c, label: c })),
+    [rows]
+  );
+  const kindOptions = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.kind).filter(Boolean))).map((k) => ({ value: k, label: EXPENSE_KIND[k] || k })),
+    [rows]
+  );
+  const supOptions = useMemo(() => {
+    const opts = (Array.from(new Set(rows.map((r) => (r.supplier || "").trim()).filter(Boolean))) as string[])
+      .sort((a, b) => a.localeCompare(b)).map((s) => ({ value: s, label: s }));
+    return rows.some((r) => !(r.supplier || "").trim()) ? [...opts, { value: "_none", label: "Sem fornecedor" }] : opts;
+  }, [rows]);
+
+  const visible = useMemo(() => {
+    const q = norm(search.trim());
+    return rows.filter((r) => {
+      if (statusFilter !== "todas" && r.status !== statusFilter) return false;
+      if (catFilter && r.category !== catFilter) return false;
+      if (kindFilter && r.kind !== kindFilter) return false;
+      if (supFilter && ((r.supplier || "").trim() || "_none") !== supFilter) return false;
+      if (q && !norm(`${r.description} ${r.supplier || ""}`).includes(q)) return false;
+      if (!inRange(r.amount, minValue, maxValue)) return false;
+      return true;
+    });
+  }, [rows, statusFilter, catFilter, kindFilter, supFilter, search, minValue, maxValue]);
+
+  const extraFilters: ActiveFilter[] = [];
+  if (catFilter) extraFilters.push({ key: "cat", label: `Categoria: ${catFilter}`, onRemove: () => setCatFilter("") });
+  if (kindFilter) extraFilters.push({ key: "kind", label: `Tipo: ${EXPENSE_KIND[kindFilter] || kindFilter}`, onRemove: () => setKindFilter("") });
+  if (supFilter) extraFilters.push({ key: "sup", label: `Fornecedor: ${supFilter === "_none" ? "Sem fornecedor" : supFilter}`, onRemove: () => setSupFilter("") });
+  const expRange = rangeLabel(minValue, maxValue);
+  if (expRange) extraFilters.push({ key: "value", label: expRange, onRemove: () => { setMinValue(""); setMaxValue(""); } });
+  const activeFilters: ActiveFilter[] = [
+    ...(statusFilter !== "todas" ? [{ key: "status", label: statusFilter === "paga" ? "Só pagas" : "Só em aberto", onRemove: () => setStatusFilter("todas") }] : []),
+    ...(search.trim() ? [{ key: "q", label: `Busca: "${search.trim()}"`, onRemove: () => setSearch("") }] : []),
+    ...extraFilters,
+  ];
+  function clearFilters() {
+    setStatusFilter("todas"); setSearch(""); setCatFilter(""); setKindFilter(""); setSupFilter("");
+    setMinValue(""); setMaxValue("");
+  }
 
   const cats = useMemo(() => {
     const m = new Map<string, { category: string; total: number; paga: number; aberta: number; count: number }>();
@@ -1844,7 +2214,7 @@ function ExpensesReport() {
     const { companyName, logoDataUrl } = await loadReportBranding(companyId);
     downloadReportPDF({
       title: "Relatório de Despesas",
-      subtitle: `${periodLabel}${statusFilter === "todas" ? "" : statusFilter === "paga" ? "  ·  Só pagas" : "  ·  Só em aberto"}`,
+      subtitle: pdfSubtitle([periodLabel], activeFilters),
       companyName,
       logoDataUrl,
       filename: `despesas_${range.start}_${range.end}.pdf`,
@@ -1907,6 +2277,25 @@ function ExpensesReport() {
           </button>
         ))}
       </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <SearchBox value={search} onChange={setSearch} placeholder="Buscar na descrição" />
+        <MoreFiltersButton count={extraFilters.length}>
+          <FilterField label="Categoria">
+            <FilterSelect value={catFilter} onChange={setCatFilter} options={catOptions} placeholder="Todas" />
+          </FilterField>
+          <FilterField label="Tipo">
+            <FilterSelect value={kindFilter} onChange={setKindFilter} options={kindOptions} />
+          </FilterField>
+          <FilterField label="Fornecedor">
+            <FilterSelect value={supFilter} onChange={setSupFilter} options={supOptions} />
+          </FilterField>
+          <FilterField label="Valor">
+            <ValueRangeFields min={minValue} max={maxValue} onMin={setMinValue} onMax={setMaxValue} />
+          </FilterField>
+        </MoreFiltersButton>
+      </div>
+      <ActiveFilterChips filters={activeFilters} onClearAll={clearFilters} />
 
       {loading ? <Loading /> : error ? (
         <div className="rounded-lg border bg-card px-6 py-12 text-center text-sm text-muted-foreground">{error}</div>

@@ -14,6 +14,7 @@ import {
   EyeOff,
   MapPin,
   X,
+  Download,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -67,6 +68,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/components/ui/use-toast";
+import {
+  ActiveFilterChips,
+  FilterField,
+  FilterSelect,
+  FilterSummary,
+  MoreFiltersButton,
+  type ActiveFilter,
+} from "@/components/filters/FilterBits";
+import { downloadCSV } from "@/lib/reportExport";
 
 /* ======================================================
    TIPOS
@@ -87,8 +97,42 @@ type Funnel = { id: string; name: string };
 type UserOption = { id: string; nome: string };
 type InstanceOption = { id: string; name: string; phone: string | null; label?: string | null };
 
+type TagOption = { id: string; name: string };
+type StageOption = { id: string; funnel_id: string; name: string };
+type LeadMeta = { funnel: string | null; stage: string | null };
+
 // Opções de ordenação
 type SortOrder = "newest" | "oldest" | "az" | "za";
+
+// Valor de "sem origem" no filtro de origem
+const NO_SOURCE = "__none__";
+
+/* Chave do número para casar lead × cliente: sem DDI 55 e sem o 9 extra
+   (o WhatsApp às vezes tira o 9). Mesma regra dos dois lados. */
+function phoneKey(raw: string | null | undefined): string {
+  const digits = String(raw || "").split("@")[0].replace(/\D/g, "");
+  if (!digits) return "";
+  let local = digits.startsWith("55") && (digits.length === 12 || digits.length === 13) ? digits.slice(2) : digits;
+  if (local.length === 11 && local[2] === "9") local = local.slice(0, 2) + local.slice(3);
+  return local.length >= 8 ? local : "";
+}
+
+// Dia local (yyyy-mm-dd) de uma data ISO
+function localDay(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function daysAgo(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return localDay(d.toISOString());
+}
+
+function brDay(ymd: string) {
+  return `${ymd.slice(8, 10)}/${ymd.slice(5, 7)}/${ymd.slice(0, 4)}`;
+}
 
 /* ======================================================
    HELPERS
@@ -204,7 +248,30 @@ export default function Contacts() {
   const [instLabels, setInstLabels] = useState<Map<string, string>>(new Map());
   const [jidInst, setJidInst] = useState<Map<string, string>>(new Map());
   const [filterInstance, setFilterInstance] = useState<string>("all");
-  
+
+  /* =======================
+     FILTROS EXTRAS ("Filtros")
+  ======================= */
+  const [tags, setTags] = useState<TagOption[]>([]);
+  const [stages, setStages] = useState<StageOption[]>([]);
+  // Funil/etapa de cada lead (consulta separada; null = coluna não existe/erro)
+  const [leadMeta, setLeadMeta] = useState<Map<string, LeadMeta> | null>(null);
+  // Números (chave) dos clientes cadastrados; null = não deu pra ler
+  const [customerKeys, setCustomerKeys] = useState<Set<string> | null>(null);
+  // Leads com a tag escolhida; null = carregando
+  const [tagLeadIds, setTagLeadIds] = useState<Set<string> | null>(null);
+
+  const [filterTag, setFilterTag] = useState("");
+  const [filterFunnel, setFilterFunnel] = useState(""); // "" | "none" | funnel_id
+  const [filterStage, setFilterStage] = useState("");
+  const [filterAssigned, setFilterAssigned] = useState(""); // "" | "me" | "none" | user_id
+  const [filterSource, setFilterSource] = useState(""); // "" | NO_SOURCE | source
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [filterCustomer, setFilterCustomer] = useState(""); // "" | "yes" | "no"
+  const [onlyWithEmail, setOnlyWithEmail] = useState(false);
+  const [onlyNoName, setOnlyNoName] = useState(false);
+
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newLeadName, setNewLeadName] = useState("");
   const [newLeadEmail, setNewLeadEmail] = useState("");
@@ -275,6 +342,130 @@ export default function Contacts() {
   }, [isAdmin, companyId]);
 
   /* ======================================================
+     DADOS DOS FILTROS EXTRAS (tudo tolerante a erro)
+  ====================================================== */
+  // Tags da empresa
+  useEffect(() => {
+    if (!companyId) return;
+    supabase
+      .from("tags" as any)
+      .select("id, name")
+      .eq("company_id", companyId)
+      .order("name", { ascending: true })
+      .then(({ data, error }) => {
+        if (error) { console.error("Contatos: tags", error); setTags([]); return; }
+        setTags(((data as any[]) || []).map((t) => ({ id: String(t.id), name: String(t.name || "") })));
+      });
+  }, [companyId]);
+
+  // Etapas dos funis da empresa
+  useEffect(() => {
+    if (!funnels.length) { setStages([]); return; }
+    supabase
+      .from("funnel_stages" as any)
+      .select("id, funnel_id, name, stage_order")
+      .in("funnel_id", funnels.map((f) => f.id))
+      .order("stage_order", { ascending: true })
+      .then(({ data, error }) => {
+        if (error) { console.error("Contatos: etapas", error); setStages([]); return; }
+        setStages(((data as any[]) || []).map((s) => ({ id: String(s.id), funnel_id: String(s.funnel_id), name: String(s.name || "") })));
+      });
+  }, [funnels]);
+
+  // Clientes cadastrados: só os números, para saber quem "já é cliente"
+  useEffect(() => {
+    if (!companyId) return;
+    let cancel = false;
+    (async () => {
+      try {
+        const keys = new Set<string>();
+        const step = 1000;
+        for (let from = 0; ; from += step) {
+          const { data, error } = await supabase
+            .from("customers" as any)
+            .select("id, remote_jid, whatsapp, phone")
+            .eq("company_id", companyId)
+            .order("id", { ascending: true })
+            .range(from, from + step - 1);
+          if (error) throw error;
+          const rows = (data as any[]) || [];
+          rows.forEach((r) => {
+            [r.remote_jid, r.whatsapp, r.phone].forEach((v) => {
+              const k = phoneKey(v);
+              if (k) keys.add(k);
+            });
+          });
+          if (rows.length < step) break;
+        }
+        if (!cancel) setCustomerKeys(keys);
+      } catch (e) {
+        console.error("Contatos: clientes", e);
+        if (!cancel) setCustomerKeys(null);
+      }
+    })();
+    return () => { cancel = true; };
+  }, [companyId]);
+
+  // Leads da tag escolhida
+  useEffect(() => {
+    if (!filterTag) { setTagLeadIds(null); return; }
+    let cancel = false;
+    setTagLeadIds(null);
+    (async () => {
+      const ids = new Set<string>();
+      try {
+        const step = 1000;
+        for (let from = 0; ; from += step) {
+          const { data, error } = await supabase
+            .from("lead_tags" as any)
+            .select("lead_id")
+            .eq("tag_id", filterTag)
+            .order("lead_id", { ascending: true })
+            .range(from, from + step - 1);
+          if (error) throw error;
+          const rows = (data as any[]) || [];
+          rows.forEach((r) => r.lead_id && ids.add(String(r.lead_id)));
+          if (rows.length < step) break;
+        }
+      } catch (e) {
+        console.error("Contatos: leads da tag", e);
+        toast({ variant: "destructive", title: "Erro", description: "Não deu para ler a tag." });
+      }
+      if (!cancel) setTagLeadIds(ids);
+    })();
+    return () => { cancel = true; };
+  }, [filterTag]);
+
+  // Funil/etapa de cada lead — consulta à parte: se as colunas não existirem,
+  // o filtro de funil some e a lista segue normal.
+  async function loadLeadMeta() {
+    if (!companyId) return;
+    try {
+      const m = new Map<string, LeadMeta>();
+      const step = 1000;
+      for (let from = 0; ; from += step) {
+        const { data, error } = await supabase
+          .from("leads" as any)
+          .select("id, current_funnel_id, current_stage_id")
+          .eq("company_id", companyId)
+          .order("id", { ascending: true })
+          .range(from, from + step - 1);
+        if (error) throw error;
+        const rows = (data as any[]) || [];
+        rows.forEach((r) => m.set(String(r.id), {
+          funnel: r.current_funnel_id ? String(r.current_funnel_id) : null,
+          stage: r.current_stage_id ? String(r.current_stage_id) : null,
+        }));
+        if (rows.length < step) break;
+      }
+      setLeadMeta(m);
+    } catch (e) {
+      console.error("Contatos: funil/etapa dos leads", e);
+      setLeadMeta(null);
+    }
+  }
+
+  /* ======================================================
      CONVERSA BORRADA
   ====================================================== */
   async function openBlurConversation(contact: ContactRow) {
@@ -335,6 +526,7 @@ export default function Contacts() {
       });
 
       setContacts(deduped);
+      void loadLeadMeta(); // não segura a lista
     } catch (error) {
       console.error("Erro ao carregar contatos:", error);
       toast({ variant: "destructive", title: "Erro", description: "Falha ao carregar contatos." });
@@ -354,7 +546,49 @@ export default function Contacts() {
   // Volta para a página 1 se mudar filtro, ordem ou limite por página
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, sortOrder, pageSize, filterUf, filterInstance]);
+  }, [
+    search, sortOrder, pageSize, filterUf, filterInstance,
+    filterTag, filterFunnel, filterStage, filterAssigned, filterSource,
+    dateFrom, dateTo, filterCustomer, onlyWithEmail, onlyNoName,
+  ]);
+
+  // Etapa só vale dentro do funil escolhido
+  useEffect(() => {
+    setFilterStage("");
+  }, [filterFunnel]);
+
+  const isCustomer = (c: ContactRow) => {
+    if (!customerKeys) return false;
+    const k = phoneKey(c.remote_jid);
+    return !!k && customerKeys.has(k);
+  };
+
+  // Origens presentes nos contatos (mostra o apelido do número quando houver)
+  const sourceOptions = useMemo(() => {
+    const set = new Set<string>();
+    let hasEmpty = false;
+    contacts.forEach((c) => {
+      const s = (c.source || "").trim();
+      if (s) set.add(s); else hasEmpty = true;
+    });
+    const opts = [...set]
+      .map((s) => ({ value: s, label: instLabels.get(s) || s }))
+      .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+    if (hasEmpty) opts.push({ value: NO_SOURCE, label: "Sem origem" });
+    return opts;
+  }, [contacts, instLabels]);
+
+  const userName = useMemo(() => new Map(users.map((u) => [u.id, u.nome])), [users]);
+  const funnelName = useMemo(() => new Map(funnels.map((f) => [f.id, f.name])), [funnels]);
+  const stageName = useMemo(() => new Map(stages.map((s) => [s.id, s.name])), [stages]);
+  const tagName = useMemo(() => new Map(tags.map((t) => [t.id, t.name])), [tags]);
+
+  const assignedOptions = isAdmin
+    ? [{ value: "none", label: "Sem responsável" }, ...users.map((u) => ({ value: u.id, label: u.nome }))]
+    : [{ value: "me", label: "Meus contatos" }];
+  const stageOptions = filterFunnel && filterFunnel !== "none"
+    ? stages.filter((s) => s.funnel_id === filterFunnel).map((s) => ({ value: s.id, label: s.name }))
+    : [];
 
   // Lista de UFs presentes nos contatos (para popular o dropdown)
   const availableUfs = useMemo(
@@ -396,6 +630,37 @@ export default function Contacts() {
           if (jidInst.get(d) !== filterInstance) return false;
         }
 
+        // 1c) Filtros do painel "Filtros"
+        if (filterTag) {
+          if (!tagLeadIds || !tagLeadIds.has(c.id)) return false;
+        }
+        if (filterFunnel && leadMeta) {
+          const meta = leadMeta.get(c.id);
+          if (filterFunnel === "none") {
+            if (meta?.funnel) return false;
+          } else if (meta?.funnel !== filterFunnel) return false;
+          if (filterStage && meta?.stage !== filterStage) return false;
+        }
+        if (filterAssigned) {
+          if (filterAssigned === "none") { if (c.assigned_user_id) return false; }
+          else if (filterAssigned === "me") { if (!user?.id || c.assigned_user_id !== user.id) return false; }
+          else if (c.assigned_user_id !== filterAssigned) return false;
+        }
+        if (filterSource) {
+          const s = (c.source || "").trim();
+          if (filterSource === NO_SOURCE ? !!s : s !== filterSource) return false;
+        }
+        if (dateFrom || dateTo) {
+          const day = localDay(c.created_at);
+          if (dateFrom && day < dateFrom) return false;
+          if (dateTo && day > dateTo) return false;
+        }
+        if (filterCustomer && customerKeys) {
+          if ((filterCustomer === "yes") !== isCustomer(c)) return false;
+        }
+        if (onlyWithEmail && !(c.email || "").trim()) return false;
+        if (onlyNoName && (c.lead_name || "").trim()) return false;
+
         // 2) Sem termo de busca → mostra tudo (passou no filtro UF)
         if (!rawTerm) return true;
 
@@ -428,7 +693,108 @@ export default function Contacts() {
         if (sortOrder === "za") return nameB.localeCompare(nameA);
         return 0;
       });
-  }, [contacts, search, filterUf, sortOrder, filterInstance, jidInst]);
+  }, [
+    contacts, search, filterUf, sortOrder, filterInstance, jidInst,
+    filterTag, tagLeadIds, filterFunnel, filterStage, leadMeta, filterAssigned, user?.id,
+    filterSource, dateFrom, dateTo, filterCustomer, customerKeys, onlyWithEmail, onlyNoName,
+  ]);
+
+  /* ======================================================
+     FILTROS ATIVOS, RESUMO E EXPORTAÇÃO
+  ====================================================== */
+  const panelFilterCount =
+    (filterTag ? 1 : 0) + (filterFunnel ? 1 : 0) + (filterStage ? 1 : 0) + (filterAssigned ? 1 : 0) +
+    (filterSource ? 1 : 0) + (dateFrom || dateTo ? 1 : 0) + (filterCustomer ? 1 : 0) +
+    (onlyWithEmail ? 1 : 0) + (onlyNoName ? 1 : 0);
+
+  function clearAllFilters() {
+    setSearch("");
+    setFilterUf("all");
+    setFilterInstance("all");
+    setFilterTag("");
+    setFilterFunnel("");
+    setFilterStage("");
+    setFilterAssigned("");
+    setFilterSource("");
+    setDateFrom("");
+    setDateTo("");
+    setFilterCustomer("");
+    setOnlyWithEmail(false);
+    setOnlyNoName(false);
+  }
+
+  const activeFilters: ActiveFilter[] = [];
+  if (search.trim()) activeFilters.push({ key: "search", label: `Busca: ${search.trim()}`, onRemove: () => setSearch("") });
+  if (filterUf !== "all") activeFilters.push({ key: "uf", label: filterUf === "other" ? "Estado: outros" : `Estado: ${filterUf}`, onRemove: () => setFilterUf("all") });
+  if (filterInstance !== "all") activeFilters.push({ key: "inst", label: `Número: ${instLabels.get(filterInstance) || filterInstance}`, onRemove: () => setFilterInstance("all") });
+  if (filterTag) activeFilters.push({ key: "tag", label: `Tag: ${tagName.get(filterTag) || "?"}`, onRemove: () => setFilterTag("") });
+  if (filterFunnel) activeFilters.push({ key: "funnel", label: filterFunnel === "none" ? "Sem funil" : `Funil: ${funnelName.get(filterFunnel) || "?"}`, onRemove: () => setFilterFunnel("") });
+  if (filterStage) activeFilters.push({ key: "stage", label: `Etapa: ${stageName.get(filterStage) || "?"}`, onRemove: () => setFilterStage("") });
+  if (filterAssigned) activeFilters.push({
+    key: "assigned",
+    label: filterAssigned === "none" ? "Sem responsável" : filterAssigned === "me" ? "Meus contatos" : `Responsável: ${userName.get(filterAssigned) || "?"}`,
+    onRemove: () => setFilterAssigned(""),
+  });
+  if (filterSource) activeFilters.push({
+    key: "source",
+    label: filterSource === NO_SOURCE ? "Sem origem" : `Origem: ${instLabels.get(filterSource) || filterSource}`,
+    onRemove: () => setFilterSource(""),
+  });
+  if (dateFrom || dateTo) activeFilters.push({
+    key: "date",
+    label: dateFrom && dateTo ? `Criado: ${brDay(dateFrom)} a ${brDay(dateTo)}` : dateFrom ? `Criado desde ${brDay(dateFrom)}` : `Criado até ${brDay(dateTo)}`,
+    onRemove: () => { setDateFrom(""); setDateTo(""); },
+  });
+  if (filterCustomer) activeFilters.push({ key: "customer", label: filterCustomer === "yes" ? "Já é cliente" : "Ainda não é cliente", onRemove: () => setFilterCustomer("") });
+  if (onlyWithEmail) activeFilters.push({ key: "email", label: "Com e-mail", onRemove: () => setOnlyWithEmail(false) });
+  if (onlyNoName) activeFilters.push({ key: "noname", label: "Sem nome", onRemove: () => setOnlyNoName(false) });
+
+  const summary = useMemo(() => {
+    let clientes = 0;
+    let semResp = 0;
+    filteredAndSortedContacts.forEach((c) => {
+      if (isCustomer(c)) clientes++;
+      if (!c.assigned_user_id) semResp++;
+    });
+    return { clientes, semResp };
+  }, [filteredAndSortedContacts, customerKeys]);
+
+  function handleExportCSV() {
+    const rows = filteredAndSortedContacts.map((c) => {
+      const meta = leadMeta?.get(c.id);
+      const resp = c.assigned_user_id
+        ? userName.get(c.assigned_user_id) || (c.assigned_user_id === user?.id ? "Você" : "Atribuído")
+        : "";
+      return {
+        nome: c.lead_name || "",
+        whatsapp: formatPhone(c.remote_jid || ""),
+        email: c.email || "",
+        estado: getUfFromJid(c.remote_jid || "") || "",
+        origem: c.source ? instLabels.get(c.source) || c.source : "",
+        funil: meta?.funnel ? funnelName.get(meta.funnel) || "" : "",
+        etapa: meta?.stage ? stageName.get(meta.stage) || "" : "",
+        responsavel: resp,
+        cliente: customerKeys ? (isCustomer(c) ? "Sim" : "Não") : "",
+        criado_em: c.created_at ? format(new Date(c.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR }) : "",
+      };
+    });
+    downloadCSV(
+      `contatos-${format(new Date(), "yyyy-MM-dd")}`,
+      [
+        { key: "nome", label: "Nome" },
+        { key: "whatsapp", label: "WhatsApp" },
+        { key: "email", label: "E-mail" },
+        { key: "estado", label: "Estado" },
+        { key: "origem", label: "Origem" },
+        { key: "funil", label: "Funil" },
+        { key: "etapa", label: "Etapa" },
+        { key: "responsavel", label: "Responsável" },
+        { key: "cliente", label: "Já é cliente" },
+        { key: "criado_em", label: "Criado em" },
+      ],
+      rows
+    );
+  }
 
   // Fatiar array para a página atual (PAGINAÇÃO)
   const totalItems = filteredAndSortedContacts.length;
@@ -700,7 +1066,7 @@ export default function Contacts() {
         <div>
           <h1 className="text-[22px] font-semibold tracking-tight">Contatos</h1>
           <p className="text-muted-foreground">
-            {search.trim() || filterUf !== "all"
+            {activeFilters.length > 0
               ? `${filteredAndSortedContacts.length} de ${contacts.length} contatos`
               : `Diretório geral de leads da empresa (${contacts.length}).`}
           </p>
@@ -779,6 +1145,97 @@ export default function Contacts() {
               </SelectContent>
             </Select>
           </div>
+
+          {/* FILTROS EXTRAS */}
+          <MoreFiltersButton count={panelFilterCount} width="w-[320px]">
+            {tags.length > 0 && (
+              <FilterField label="Tag">
+                <FilterSelect
+                  value={filterTag}
+                  onChange={setFilterTag}
+                  placeholder="Todas"
+                  options={tags.map((t) => ({ value: t.id, label: t.name }))}
+                />
+              </FilterField>
+            )}
+
+            {leadMeta && funnels.length > 0 && (
+              <FilterField label="Funil e etapa">
+                <div className="flex gap-2">
+                  <FilterSelect
+                    value={filterFunnel}
+                    onChange={setFilterFunnel}
+                    placeholder="Todos os funis"
+                    options={[...funnels.map((f) => ({ value: f.id, label: f.name })), { value: "none", label: "Sem funil" }]}
+                  />
+                  <FilterSelect
+                    value={filterStage}
+                    onChange={setFilterStage}
+                    placeholder={stageOptions.length ? "Todas as etapas" : "Etapa"}
+                    options={stageOptions}
+                    className={stageOptions.length ? "" : "opacity-50 pointer-events-none"}
+                  />
+                </div>
+              </FilterField>
+            )}
+
+            <FilterField label="Responsável">
+              <FilterSelect
+                value={filterAssigned}
+                onChange={setFilterAssigned}
+                placeholder="Todos"
+                options={assignedOptions}
+              />
+            </FilterField>
+
+            {sourceOptions.length > 0 && (
+              <FilterField label="Origem">
+                <FilterSelect value={filterSource} onChange={setFilterSource} placeholder="Todas" options={sourceOptions} />
+              </FilterField>
+            )}
+
+            <FilterField label="Criado entre">
+              <div className="flex items-center gap-2">
+                <Input type="date" value={dateFrom} max={dateTo || undefined} onChange={(e) => setDateFrom(e.target.value)} className="h-8 px-2 text-xs" aria-label="Criado de" />
+                <span className="text-xs text-muted-foreground">até</span>
+                <Input type="date" value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} className="h-8 px-2 text-xs" aria-label="Criado até" />
+              </div>
+              <div className="flex gap-1.5 pt-1">
+                <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => { setDateFrom(daysAgo(6)); setDateTo(""); }}>
+                  Últimos 7 dias
+                </Button>
+                <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => { setDateFrom(daysAgo(29)); setDateTo(""); }}>
+                  Últimos 30 dias
+                </Button>
+              </div>
+            </FilterField>
+
+            <FilterField label="Cliente">
+              {customerKeys ? (
+                <FilterSelect
+                  value={filterCustomer}
+                  onChange={setFilterCustomer}
+                  placeholder="Todos"
+                  options={[{ value: "yes", label: "Já é cliente" }, { value: "no", label: "Ainda não é cliente" }]}
+                />
+              ) : (
+                <p className="text-xs text-muted-foreground">Não deu para ler os clientes.</p>
+              )}
+            </FilterField>
+
+            <FilterField label="Dados">
+              <div className="flex flex-wrap gap-x-4 gap-y-1">
+                <label className="flex items-center gap-1.5 text-xs">
+                  <input type="checkbox" checked={onlyWithEmail} onChange={(e) => setOnlyWithEmail(e.target.checked)} />
+                  Com e-mail
+                </label>
+                <label className="flex items-center gap-1.5 text-xs">
+                  <input type="checkbox" checked={onlyNoName} onChange={(e) => setOnlyNoName(e.target.checked)} />
+                  Sem nome
+                </label>
+              </div>
+            </FilterField>
+          </MoreFiltersButton>
 
           {/* BOTÃO E MODAL DE NOVO CONTATO */}
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
@@ -934,6 +1391,40 @@ export default function Contacts() {
           </Dialog>
         </div>
       </div>
+
+      {/* FILTROS ATIVOS + RESUMO + EXPORTAR */}
+      {!loading && (
+        <div className="space-y-2">
+          <ActiveFilterChips filters={activeFilters} onClearAll={clearAllFilters} />
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex-1 min-w-[240px]">
+              <FilterSummary
+                items={[
+                  { label: "Contatos", value: filteredAndSortedContacts.length.toLocaleString("pt-BR") },
+                  ...(customerKeys
+                    ? [{ label: "Já são clientes", value: summary.clientes.toLocaleString("pt-BR"), tone: "emerald" as const }]
+                    : []),
+                  { label: "Sem responsável", value: summary.semResp.toLocaleString("pt-BR"), tone: summary.semResp ? ("amber" as const) : ("muted" as const) },
+                ]}
+              />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5"
+              onClick={handleExportCSV}
+              disabled={filteredAndSortedContacts.length === 0}
+            >
+              <Download className="h-3.5 w-3.5" />
+              Exportar CSV
+            </Button>
+          </div>
+          {filterTag && !tagLeadIds && (
+            <p className="text-xs text-muted-foreground">Carregando contatos da tag…</p>
+          )}
+        </div>
+      )}
 
       {/* CONTROLES DE PAGINAÇÃO (Topo) */}
       {paginationControls}

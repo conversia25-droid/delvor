@@ -14,7 +14,7 @@ import infinityBotIcon from "@/assets/infinitybot.ico";
 const InfinityBotSheet = lazy(() => import("@/components/InfinityBotSheet"));
 import QuickMessagesPopover from "@/components/whatsapp-inbox/QuickMessagesPopover";
 import { useLocation } from "react-router-dom";
-import { Eye, EyeOff, RefreshCcw, Tag, ArrowUp, ArrowDown, Send, Search, User, Check, CheckCheck, Trash2, X, CornerUpLeft, Clock, AlertCircle, Calendar, Smile, Forward, ChevronUp, ChevronDown } from "lucide-react";
+import { Eye, EyeOff, RefreshCcw, Tag, ArrowUp, ArrowDown, Send, Search, Check, CheckCheck, Trash2, X, CornerUpLeft, Clock, AlertCircle, Calendar, Smile, Forward, ChevronUp, ChevronDown } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { MEDIA_CONFIG } from "./WhatsAppInbox.media";
@@ -30,6 +30,7 @@ import { ConversationContextMenu } from "./whatsapp-inbox/ConversationContextMen
 import { AddUserDialog } from "./whatsapp-inbox/AddUserDialog";
 import ChatCustomerActions from "./whatsapp-inbox/ChatCustomerActions";
 import { takeChatDraft } from "@/lib/customerPending";
+import { ActiveFilterChips, FilterField, FilterSelect, MoreFiltersButton, type ActiveFilter } from "@/components/filters/FilterBits";
 
 function __readEnvVar(name: string): string | undefined {
   // Runtime config (window.__OSM_ENV__) prevalece sobre import.meta.env
@@ -663,6 +664,20 @@ export default function WhatsAppInbox({ showLite = true, showApi = true }: Whats
   const [adminStageFilter, setAdminStageFilter] = useState<string>("all");
   const [filterStages, setFilterStages] = useState<FunnelStage[]>([]);
   const [adminOnlyUnassigned, setAdminOnlyUnassigned] = useState<boolean>(false);
+  // Filtros extras da lista (só no cliente). Quem não é gestor filtra funil/etapa
+  // aqui, sem recarregar do banco; gestor continua usando os admin* (filtro no servidor).
+  const [clientFunnelFilter, setClientFunnelFilter] = useState<string>("all");
+  const [clientStageFilter, setClientStageFilter] = useState<string>("all");
+  const [onlyAwaitingReply, setOnlyAwaitingReply] = useState<boolean>(false);
+  const [lastMsgPeriod, setLastMsgPeriod] = useState<"" | "today" | "7d" | "30d" | "older30">("");
+  const funnelSel = isManager ? adminFunnelFilter : clientFunnelFilter;
+  const stageSel = isManager ? adminStageFilter : clientStageFilter;
+  const setFunnelSel = (v: string) => {
+    if (isManager) { setAdminFunnelFilter(v); return; }
+    setClientFunnelFilter(v);
+    setClientStageFilter("all");
+  };
+  const setStageSel = (v: string) => { if (isManager) setAdminStageFilter(v); else setClientStageFilter(v); };
 
   const [leadCache, setLeadCache] = useState<Record<string, any>>({});
   const [leadCacheLoaded, setLeadCacheLoaded] = useState(false);
@@ -2075,17 +2090,20 @@ export default function WhatsAppInbox({ showLite = true, showApi = true }: Whats
 
   useEffect(() => {
     setAdminStageFilter("all");
-    if (!adminFunnelFilter || adminFunnelFilter === "all") { setFilterStages([]); return; }
+    if (!funnelSel || funnelSel === "all") { setFilterStages([]); return; }
+    let cancelled = false;
     (async () => {
       const { data, error } = await supabase
         .from("funnel_stages")
         .select("id,funnel_id,name,stage_order,color,stage_type")
-        .eq("funnel_id", adminFunnelFilter)
+        .eq("funnel_id", funnelSel)
         .order("stage_order", { ascending: true });
+      if (cancelled) return;
       if (error) { console.error("load filter stages error:", error); setFilterStages([]); return; }
       setFilterStages((data as FunnelStage[]) || []);
     })();
-  }, [adminFunnelFilter]);
+    return () => { cancelled = true; };
+  }, [funnelSel]);
 
 const lastMessageByLead = useMemo(() => {
   // 1) Memória local (mensagens carregadas — dão prioridade pq são as mais frescas)
@@ -2280,11 +2298,34 @@ const lastMessageByLead = useMemo(() => {
         return uids.includes(targetFilter) || String(meta?.assigned_user_id) === targetFilter;
       })
       .filter(([jid, meta]) => {
-        if (isManager && adminFunnelFilter !== "all") {
-          if (meta?.current_funnel_id !== adminFunnelFilter) return false;
-          if (adminStageFilter !== "all" && meta?.current_stage_id !== adminStageFilter) return false;
+        if (funnelSel !== "all") {
+          if (meta?.current_funnel_id !== funnelSel) return false;
+          if (stageSel !== "all" && meta?.current_stage_id !== stageSel) return false;
         }
         return true;
+      })
+      .filter(([jid]) => {
+        if (!onlyAwaitingReply) return true;
+        // Aguardando resposta = última mensagem conhecida veio do cliente
+        const last = lastMessageByLead[jid] as any;
+        return Boolean(last) && last.from_me === false;
+      })
+      .filter(([jid, meta]) => {
+        if (!lastMsgPeriod) return true;
+        const last = lastMessageByLead[jid];
+        const ts =
+          (last?.created_at ? new Date(last.created_at).getTime() : 0) ||
+          (meta?.last_message_at ? new Date(meta.last_message_at).getTime() : 0) ||
+          (meta?.waiting_since ? new Date(meta.waiting_since).getTime() : 0);
+        const DAY = 24 * 60 * 60 * 1000;
+        const now = Date.now();
+        if (lastMsgPeriod === "today") {
+          const start = new Date(); start.setHours(0, 0, 0, 0);
+          return ts >= start.getTime();
+        }
+        if (lastMsgPeriod === "7d") return ts >= now - 7 * DAY;
+        if (lastMsgPeriod === "30d") return ts >= now - 30 * DAY;
+        return ts < now - 30 * DAY; // older30 (inclui quem nunca conversou)
       })
       .filter(([jid]) => {
         if (showLite && showApi) return true;
@@ -2389,7 +2430,7 @@ const lastMessageByLead = useMemo(() => {
     companyId, leadCache, leadCacheLoaded, isAdmin, hiddenJids, search, tagFilterId,
     tagFilterJids, onlyUnread, unreadByJid, lastMessageByLead, leadSortOrder, instanceFilter, jidInstance,
     adminUserFilter, urlUserFilter, adminFunnelFilter, adminStageFilter, myUserId,
-    showLite, showApi
+    showLite, showApi, funnelSel, stageSel, onlyAwaitingReply, lastMsgPeriod
   ]);
 
   useEffect(() => {
@@ -4485,6 +4526,53 @@ async function sendReaction(msg: Message, emoji: string) {
   }, [orderedLeads, unreadByJid]);
   // --------------------------------------------------
 
+  // --- Filtros da lista: etiquetas ativas, contagem e "Limpar filtros" ---
+  const PERIOD_LABELS: Record<string, string> = {
+    today: "Hoje", "7d": "Últimos 7 dias", "30d": "Últimos 30 dias", older30: "Sem conversa há +30 dias",
+  };
+  const respSel = isManager ? (urlUserFilter || adminUserFilter) : "all";
+  const respLabel = (v: string) =>
+    v === "unassigned" ? "Não atribuídas"
+      : v === myUserId ? "Minhas conversas"
+      : teamUsers.find((u) => u.id === v)?.nome || "Membro";
+  const respOptions = [
+    ...(myUserId ? [{ value: String(myUserId), label: "Minhas conversas" }] : []),
+    { value: "unassigned", label: "Não atribuídas" },
+    ...teamUsers.filter((u) => u.id !== myUserId).map((u) => ({ value: u.id, label: u.nome || u.email || "Sem nome" })),
+  ];
+  const moreFiltersCount =
+    (isManager && respSel !== "all" ? 1 : 0) +
+    (funnelSel !== "all" ? 1 : 0) +
+    (stageSel !== "all" ? 1 : 0) +
+    (onlyAwaitingReply ? 1 : 0) +
+    (lastMsgPeriod ? 1 : 0);
+  const clearListFilters = () => {
+    setOnlyUnread(false);
+    setTagFilterId("");
+    setInstanceFilter("");
+    setSearch("");
+    if (isManager) {
+      setAdminUserFilter("all");
+      setAdminFunnelFilter("all");
+      setAdminStageFilter("all");
+    }
+    setClientFunnelFilter("all");
+    setClientStageFilter("all");
+    setOnlyAwaitingReply(false);
+    setLastMsgPeriod("");
+  };
+  const activeListFilters: ActiveFilter[] = [];
+  if (search.trim()) activeListFilters.push({ key: "search", label: `Busca: ${search.trim()}`, onRemove: () => setSearch("") });
+  if (onlyUnread) activeListFilters.push({ key: "unread", label: "Não lidas", onRemove: () => setOnlyUnread(false) });
+  if (tagFilterId) activeListFilters.push({ key: "tag", label: `Tag: ${tagsCatalog.find((t) => t.id === tagFilterId)?.name || "—"}`, onRemove: () => setTagFilterId("") });
+  if (instanceFilter) activeListFilters.push({ key: "inst", label: `Número: ${instanceLabels.get(instanceFilter) || instanceFilter}`, onRemove: () => setInstanceFilter("") });
+  if (isManager && respSel !== "all") activeListFilters.push({ key: "resp", label: respLabel(respSel), onRemove: () => setAdminUserFilter("all") });
+  if (funnelSel !== "all") activeListFilters.push({ key: "funnel", label: `Funil: ${funnels.find((f) => f.id === funnelSel)?.name || "—"}`, onRemove: () => setFunnelSel("all") });
+  if (stageSel !== "all") activeListFilters.push({ key: "stage", label: `Etapa: ${filterStages.find((s) => s.id === stageSel)?.name || "—"}`, onRemove: () => setStageSel("all") });
+  if (onlyAwaitingReply) activeListFilters.push({ key: "await", label: "Aguardando resposta", onRemove: () => setOnlyAwaitingReply(false) });
+  if (lastMsgPeriod) activeListFilters.push({ key: "period", label: PERIOD_LABELS[lastMsgPeriod], onRemove: () => setLastMsgPeriod("") });
+  // --------------------------------------------------
+
   return (
     <div className="flex h-[calc(100dvh-8rem-3.5rem)] md:h-[calc(100dvh-8rem)] gap-0 overflow-hidden">
       <style>{`@keyframes pulse-soft{0%{background-color:rgba(59,130,246,0.10)}50%{background-color:rgba(59,130,246,0.18)}100%{background-color:rgba(59,130,246,0.10)}}`}</style>
@@ -4550,50 +4638,66 @@ async function sendReaction(msg: Message, emoji: string) {
             </div>
           )}
 
-        {isManager && (
-          <div className="flex gap-2 mt-2 px-4">
-            <Select value={urlUserFilter || adminUserFilter} onValueChange={(v) => { setAdminUserFilter(v); }} >
-              <SelectTrigger className="h-9">
-                <User className="mr-2 h-4 w-4 opacity-70" />
-                <SelectValue placeholder="Responsável" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="unassigned">Não atribuídos</SelectItem>
-                {teamUsers.map((u) => ( <SelectItem key={u.id} value={u.id}> {u.nome} </SelectItem> ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={adminFunnelFilter} onValueChange={setAdminFunnelFilter}>
-              <SelectTrigger className="h-9">
-                <SelectValue placeholder="Funil" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos funis</SelectItem>
-                {funnels.map((f) => ( <SelectItem key={f.id} value={f.id}> {f.name} </SelectItem> ))}
-              </SelectContent>
-            </Select>
-
-            {adminFunnelFilter !== "all" && filterStages.length > 0 && (
-              <Select value={adminStageFilter} onValueChange={setAdminStageFilter}>
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Etapa" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas etapas</SelectItem>
-                  {filterStages.map((s) => ( <SelectItem key={s.id} value={s.id}> {s.name} </SelectItem> ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
-        )}
-
-        {/* ORDENAÇÃO + NÃO LIDAS */}
+        {/* ORDENAÇÃO + MAIS FILTROS + NÃO LIDAS */}
         <div className="px-4 mt-2 mb-1 flex items-center gap-2">
           <div className="flex items-center gap-1 shrink-0">
             <Button type="button" variant={leadSortOrder === "desc" ? "default" : "outline"} size="sm" className="h-7 w-7 px-0" title="Mais recentes primeiro" onClick={() => setLeadSortOrder("desc")} > <ArrowDown className="h-3.5 w-3.5" /> </Button>
             <Button type="button" variant={leadSortOrder === "asc" ? "default" : "outline"} size="sm" className="h-7 w-7 px-0" title="Mais antigas primeiro" onClick={() => setLeadSortOrder("asc")} > <ArrowUp className="h-3.5 w-3.5" /> </Button>
           </div>
+          <div className="shrink-0">
+            <MoreFiltersButton count={moreFiltersCount} width="w-72">
+              {isManager && (
+                <FilterField label="Responsável">
+                  <FilterSelect
+                    value={respSel === "all" ? "" : respSel}
+                    onChange={(v) => setAdminUserFilter(v || "all")}
+                    options={respOptions}
+                    placeholder="Todas as conversas"
+                  />
+                </FilterField>
+              )}
+              {funnels.length > 0 && (
+                <FilterField label="Funil">
+                  <FilterSelect
+                    value={funnelSel === "all" ? "" : funnelSel}
+                    onChange={(v) => setFunnelSel(v || "all")}
+                    options={funnels.map((f) => ({ value: f.id, label: f.name }))}
+                    placeholder="Todos os funis"
+                  />
+                </FilterField>
+              )}
+              {funnels.length > 0 && funnelSel !== "all" && filterStages.length > 0 && (
+                <FilterField label="Etapa">
+                  <FilterSelect
+                    value={stageSel === "all" ? "" : stageSel}
+                    onChange={(v) => setStageSel(v || "all")}
+                    options={filterStages.map((s) => ({ value: s.id, label: s.name }))}
+                    placeholder="Todas as etapas"
+                  />
+                </FilterField>
+              )}
+              <FilterField label="Última mensagem">
+                <FilterSelect
+                  value={lastMsgPeriod}
+                  onChange={(v) => setLastMsgPeriod(v as typeof lastMsgPeriod)}
+                  options={[
+                    { value: "today", label: "Hoje" },
+                    { value: "7d", label: "Últimos 7 dias" },
+                    { value: "30d", label: "Últimos 30 dias" },
+                    { value: "older30", label: "Sem conversa há mais de 30 dias" },
+                  ]}
+                  placeholder="Qualquer data"
+                />
+              </FilterField>
+              <label className="flex cursor-pointer items-center gap-2 text-xs">
+                <input type="checkbox" className="h-3.5 w-3.5" checked={onlyAwaitingReply} onChange={(e) => setOnlyAwaitingReply(e.target.checked)} />
+                Aguardando resposta <span className="text-muted-foreground">(cliente falou por último)</span>
+              </label>
+            </MoreFiltersButton>
+          </div>
+          <span className="shrink-0 text-[11px] text-muted-foreground whitespace-nowrap">
+            {orderedLeads.length} {orderedLeads.length === 1 ? "conversa" : "conversas"}
+          </span>
           <div className="shrink-0 ml-auto">
             {unreadStats.msgCount > 0 ? (
               <span className="text-[10px] bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full font-semibold animate-in fade-in transition-all whitespace-nowrap">
@@ -4606,6 +4710,12 @@ async function sendReaction(msg: Message, emoji: string) {
             )}
           </div>
         </div>
+
+        {activeListFilters.length > 0 && (
+          <div className="px-4 -mt-2">
+            <ActiveFilterChips filters={activeListFilters} onClearAll={clearListFilters} />
+          </div>
+        )}
 
         <style>{`.custom-scrollbar::-webkit-scrollbar { width: 6px; } .custom-scrollbar::-webkit-scrollbar-track { background: transparent; } .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(0, 0, 0, 0.1); border-radius: 10px; } .dark .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(255, 255, 255, 0.1); } `}</style>
 

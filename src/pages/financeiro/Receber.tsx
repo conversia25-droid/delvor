@@ -8,8 +8,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   HandCoins, Loader2, AlertTriangle, CalendarClock, CheckCircle2, Undo2, Search, Zap, Wallet,
-  MoreHorizontal, Paperclip, FileText, Copy, Send, MessageCircle, Receipt, History,
+  MoreHorizontal, Paperclip, FileText, Copy, Send, MessageCircle, Receipt, History, Download,
 } from "lucide-react";
+import {
+  ActiveFilterChips, FilterField, FilterSelect, FilterSummary, MoreFiltersButton, type ActiveFilter, type SummaryItem,
+} from "@/components/filters/FilterBits";
+import { downloadCSV } from "@/lib/reportExport";
 import { HistoryDialog, ReasonDialog, type ReasonRequest } from "@/components/finance/Dialogs";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -154,6 +158,52 @@ const METHOD_FILTERS = [
 ];
 const MAIN_METHODS = ["boleto", "crediario", "transferencia", "cartao_credito"];
 
+/* ---------- filtros extras (lembrados por tela) ---------- */
+const BOLETO_OPTIONS = [
+  { value: "a_emitir", label: "A emitir" },
+  { value: "emitido", label: "Emitido (todos)" },
+  { value: "nao_enviado", label: "Emitido, não enviado" },
+  { value: "enviado", label: "Enviado ao cliente" },
+];
+const ATTACH_OPTIONS = [{ value: "com", label: "Com anexo" }, { value: "sem", label: "Sem anexo" }];
+type Extra = {
+  method: string; customer: string; seller: string; dueFrom: string; dueTo: string;
+  minV: string; maxV: string; boleto: string; attach: string;
+};
+const EMPTY_EXTRA: Extra = { method: "todas", customer: "", seller: "", dueFrom: "", dueTo: "", minV: "", maxV: "", boleto: "", attach: "" };
+const STORE_KEY = "filtros:contas-receber";
+function readStored(): Extra {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return EMPTY_EXTRA;
+    const o = JSON.parse(raw) || {};
+    const extra = { ...EMPTY_EXTRA };
+    for (const k of Object.keys(EMPTY_EXTRA) as (keyof Extra)[]) if (typeof o[k] === "string") extra[k] = o[k];
+    if (!METHOD_FILTERS.some((m) => m.key === extra.method)) extra.method = "todas";
+    return extra;
+  } catch { return EMPTY_EXTRA; }
+}
+/** "1.234,56" / "1234.56" / "50" → número; vazio ou inválido → null. */
+function parseMoney(s: string): number | null {
+  const t = s.trim();
+  if (!t) return null;
+  const n = Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t);
+  return Number.isFinite(n) ? n : null;
+}
+function monthRange(offset: number) {
+  const now = new Date();
+  return {
+    from: localISODate(new Date(now.getFullYear(), now.getMonth() + offset, 1)),
+    to: localISODate(new Date(now.getFullYear(), now.getMonth() + offset + 1, 0)),
+  };
+}
+const customerKey = (r: Receivable) => r.customer_id || (r.customer_name ? `nome:${r.customer_name}` : "__none");
+const csvMoney = (v: number) => v.toFixed(2).replace(".", ",");
+const boletoSituation = (r: Receivable) =>
+  r.method !== "boleto" || !r.issue_status ? ""
+    : r.issue_status === "a_emitir" ? "a emitir"
+    : r.sent_at ? "emitido, enviado" : "emitido, não enviado";
+
 export default function Receber() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -162,8 +212,14 @@ export default function Receber() {
   const [tab, setTab] = useState<Tab>("aberto");
   const [period, setPeriod] = useState<PaidPeriod>("mes");
   const [openFilter, setOpenFilter] = useState<OpenFilter>("todos");
-  const [method, setMethod] = useState("todas");
   const [q, setQ] = useState("");
+  const [extra, setExtra] = useState<Extra>(readStored);
+  const setX = (patch: Partial<Extra>) => setExtra((prev) => ({ ...prev, ...patch }));
+  const method = extra.method;
+  const setMethod = (v: string) => setX({ method: v });
+  useEffect(() => {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(extra)); } catch { /* sem storage */ }
+  }, [extra]);
 
   const [rows, setRows] = useState<Receivable[]>([]);
   const [loading, setLoading] = useState(true);
@@ -220,19 +276,40 @@ export default function Receber() {
   }, []);
 
   /* ---------- filtros ---------- */
-  const matchesCommon = useCallback((r: Receivable) => {
-    if (method === "outras" && MAIN_METHODS.includes(r.method)) return false;
-    if (method !== "todas" && method !== "outras" && r.method !== method) return false;
+  const minV = parseMoney(extra.minV);
+  const maxV = parseMoney(extra.maxV);
+  /** toIssue = aba A emitir: lá tudo é boleto a emitir, então forma e situação do boleto não se aplicam. */
+  const matchesCommon = useCallback((r: Receivable, toIssue = false) => {
+    if (!toIssue) {
+      if (method === "outras" && MAIN_METHODS.includes(r.method)) return false;
+      if (method !== "todas" && method !== "outras" && r.method !== method) return false;
+      if (extra.boleto) {
+        if (r.method !== "boleto") return false;
+        if (extra.boleto === "a_emitir" && r.issue_status !== "a_emitir") return false;
+        if (extra.boleto !== "a_emitir" && r.issue_status !== "emitido") return false;
+        if (extra.boleto === "enviado" && !r.sent_at) return false;
+        if (extra.boleto === "nao_enviado" && !!r.sent_at) return false;
+      }
+    }
+    if (extra.customer && customerKey(r) !== extra.customer) return false;
+    if (extra.seller && (extra.seller === "__none" ? !!r.seller_name : r.seller_name !== extra.seller)) return false;
+    if ((extra.dueFrom || extra.dueTo) && !r.due_date) return false;
+    if (extra.dueFrom && r.due_date! < extra.dueFrom) return false;
+    if (extra.dueTo && r.due_date! > extra.dueTo) return false;
+    if (minV != null && r.amount < minV - 0.004) return false;
+    if (maxV != null && r.amount > maxV + 0.004) return false;
+    if (extra.attach === "com" && !r.attachments_count) return false;
+    if (extra.attach === "sem" && !!r.attachments_count) return false;
     const term = q.trim().toLowerCase();
     if (term) {
       const hay = `${r.customer_name || ""} ${r.sale_number} ${saleNo(r.sale_number)} ${r.boleto_line || ""}`.toLowerCase();
       if (!hay.includes(term)) return false;
     }
     return true;
-  }, [method, q]);
+  }, [method, q, extra, minV, maxV]);
 
   const toIssueRows = useMemo(
-    () => rows.filter((r) => isToIssue(r) && matchesCommon(r))
+    () => rows.filter((r) => isToIssue(r) && matchesCommon(r, true))
       .sort((a, b) => (a.created_at || "").localeCompare(b.created_at || "")),
     [rows, matchesCommon],
   );
@@ -277,9 +354,168 @@ export default function Receber() {
   ), [paidRows]);
 
   const selectable = useMemo(() => openRows.filter((r) => !isToIssue(r)), [openRows]);
-  const selectedRows = useMemo(() => rows.filter((r) => selected.has(r.id)), [rows, selected]);
+  // seleção em lote (baixa e carnê) só vale para o que está na tela
+  useEffect(() => {
+    setSelected((prev) => {
+      if (!prev.size) return prev;
+      const vis = new Set(selectable.map((r) => r.id));
+      const next = new Set([...prev].filter((id) => vis.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [selectable]);
+  useEffect(() => {
+    setIssueSel((prev) => {
+      if (!prev.size) return prev;
+      const vis = new Set(toIssueRows.map((r) => r.id));
+      const next = new Set([...prev].filter((id) => vis.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [toIssueRows]);
+  const selectedRows = useMemo(() => selectable.filter((r) => selected.has(r.id)), [selectable, selected]);
   const selectedGross = selectedRows.reduce((s, r) => s + r.amount, 0);
   const allVisibleSelected = selectable.length > 0 && selectable.every((r) => selected.has(r.id));
+  const issueSelRows = useMemo(() => toIssueRows.filter((r) => issueSel.has(r.id)), [toIssueRows, issueSel]);
+
+  /* ---------- opções, etiquetas e resumo dos filtros ---------- */
+  const customerOptions = useMemo(() => {
+    const m = new Map<string, string>();
+    rows.forEach((r) => { const k = customerKey(r); if (!m.has(k)) m.set(k, r.customer_name || "Sem cliente"); });
+    if (extra.customer && !m.has(extra.customer)) m.set(extra.customer, extra.customer.startsWith("nome:") ? extra.customer.slice(5) : "Cliente selecionado");
+    return [...m].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+  }, [rows, extra.customer]);
+  const sellerOptions = useMemo(() => {
+    const s = new Set<string>();
+    let none = false;
+    rows.forEach((r) => { if (r.seller_name) s.add(r.seller_name); else none = true; });
+    if (extra.seller && extra.seller !== "__none") s.add(extra.seller);
+    const opts = [...s].sort((a, b) => a.localeCompare(b, "pt-BR")).map((v) => ({ value: v, label: v }));
+    if (none || extra.seller === "__none") opts.push({ value: "__none", label: "Sem vendedor" });
+    return opts;
+  }, [rows, extra.seller]);
+  const labelOf = (opts: { value: string; label: string }[], v: string) => opts.find((o) => o.value === v)?.label || v;
+
+  const methodApplies = tab !== "emitir";
+  const activeFilters: ActiveFilter[] = [];
+  if (q.trim()) activeFilters.push({ key: "q", label: `Busca: "${q.trim()}"`, onRemove: () => setQ("") });
+  if (methodApplies && method !== "todas") activeFilters.push({ key: "met", label: `Forma: ${METHOD_FILTERS.find((m) => m.key === method)?.label || method}`, onRemove: () => setMethod("todas") });
+  if (extra.customer) activeFilters.push({ key: "cli", label: `Cliente: ${labelOf(customerOptions, extra.customer)}`, onRemove: () => setX({ customer: "" }) });
+  if (extra.seller) activeFilters.push({ key: "vend", label: `Vendedor: ${labelOf(sellerOptions, extra.seller)}`, onRemove: () => setX({ seller: "" }) });
+  if (extra.dueFrom || extra.dueTo) {
+    activeFilters.push({
+      key: "due",
+      label: `Vencimento: ${extra.dueFrom ? fmtDate(extra.dueFrom) : "…"} a ${extra.dueTo ? fmtDate(extra.dueTo) : "…"}`,
+      onRemove: () => setX({ dueFrom: "", dueTo: "" }),
+    });
+  }
+  if (minV != null || maxV != null) {
+    activeFilters.push({
+      key: "val",
+      label: minV != null && maxV != null ? `Valor: ${formatBRL(minV)} a ${formatBRL(maxV)}` : minV != null ? `Valor a partir de ${formatBRL(minV)}` : `Valor até ${formatBRL(maxV!)}`,
+      onRemove: () => setX({ minV: "", maxV: "" }),
+    });
+  }
+  if (methodApplies && extra.boleto) activeFilters.push({ key: "bol", label: `Boleto: ${labelOf(BOLETO_OPTIONS, extra.boleto).toLowerCase()}`, onRemove: () => setX({ boleto: "" }) });
+  if (extra.attach) activeFilters.push({ key: "att", label: extra.attach === "com" ? "Com anexo" : "Sem anexo", onRemove: () => setX({ attach: "" }) });
+  const panelCount = [extra.customer, extra.seller, extra.dueFrom || extra.dueTo, minV != null || maxV != null,
+    methodApplies && extra.boleto, extra.attach].filter(Boolean).length;
+  function clearFilters() {
+    setQ(""); setExtra(EMPTY_EXTRA); setOpenFilter("todos");
+  }
+
+  const summary = useMemo<SummaryItem[]>(() => {
+    if (tab === "emitir") {
+      const total = toIssueRows.reduce((s, r) => s + r.amount, 0);
+      const stuck = toIssueRows.filter((r) => daysSince(r.created_at) >= 1).length;
+      return [
+        { label: "Boletos", value: String(toIssueRows.length) },
+        { label: "Total", value: formatBRL(total) },
+        { label: "Parados há mais de 1 dia", value: String(stuck), tone: stuck > 0 ? "red" : "muted" },
+      ];
+    }
+    if (tab === "aberto") {
+      let total = 0, overdue = 0, upcoming = 0, noDue = 0;
+      openRows.forEach((r) => {
+        total += r.amount;
+        if (!r.due_date) noDue += r.amount;
+        else if (daysUntil(r.due_date) < 0) overdue += r.amount;
+        else upcoming += r.amount;
+      });
+      const items: SummaryItem[] = [
+        { label: "Pagamentos", value: String(openRows.length) },
+        { label: "Total", value: formatBRL(total) },
+        { label: "Vencido", value: formatBRL(overdue), tone: overdue > 0 ? "red" : "muted" },
+        { label: "A vencer", value: formatBRL(upcoming) },
+      ];
+      if (noDue > 0) items.push({ label: "Sem vencimento", value: formatBRL(noDue), tone: "muted" });
+      return items;
+    }
+    if (tab === "recebidos") {
+      return [
+        { label: "Baixas", value: String(paidRows.length) },
+        { label: "Bruto", value: formatBRL(paidTotals.gross) },
+        { label: "Recebido", value: formatBRL(paidTotals.net), tone: "emerald" },
+        { label: "Taxas", value: paidTotals.fee > 0 ? `−${formatBRL(paidTotals.fee)}` : formatBRL(0), tone: paidTotals.fee > 0 ? "red" : "muted" },
+      ];
+    }
+    const total = debtors.reduce((s, d) => s + d.total, 0);
+    const count = debtors.reduce((s, d) => s + d.items.length, 0);
+    return [
+      { label: "Clientes", value: String(debtors.length) },
+      { label: "Pagamentos vencidos", value: String(count) },
+      { label: "Total vencido", value: formatBRL(total), tone: total > 0 ? "red" : "muted" },
+    ];
+  }, [tab, toIssueRows, openRows, paidRows, paidTotals, debtors]);
+
+  function exportCSV() {
+    const today = localISODate();
+    const base = (r: Receivable) => ({
+      sale: saleNo(r.sale_number), customer: r.customer_name || "", seller: r.seller_name || "",
+      method: METHOD_LABELS[r.method] || r.method, boleto: boletoSituation(r), due: fmtDate(r.due_date),
+      amount: csvMoney(r.amount), att: r.attachments_count || 0,
+    });
+    if (tab === "emitir") {
+      downloadCSV(`boletos-a-emitir_${today}`, [
+        { key: "sold", label: "Vendido em" }, { key: "customer", label: "Cliente" }, { key: "seller", label: "Vendedor" },
+        { key: "sale", label: "Venda" }, { key: "due", label: "Vencimento previsto" }, { key: "amount", label: "Valor" },
+        { key: "att", label: "Anexos" },
+      ], toIssueRows.map((r) => ({ ...base(r), sold: fmtDateTime(r.created_at || null) })));
+      return;
+    }
+    if (tab === "aberto") {
+      downloadCSV(`contas-a-receber_em-aberto_${today}`, [
+        { key: "due", label: "Vencimento" }, { key: "situation", label: "Situação" }, { key: "customer", label: "Cliente" },
+        { key: "seller", label: "Vendedor" }, { key: "sale", label: "Venda" }, { key: "method", label: "Forma" },
+        { key: "boleto", label: "Boleto" }, { key: "amount", label: "Valor" }, { key: "att", label: "Anexos" },
+      ], openRows.map((r) => {
+        const d = r.due_date ? daysUntil(r.due_date) : null;
+        return {
+          ...base(r),
+          situation: d == null ? "sem vencimento" : d < 0 ? `vencido há ${-d} dia(s)` : d === 0 ? "vence hoje" : `vence em ${d} dia(s)`,
+        };
+      }));
+      return;
+    }
+    if (tab === "recebidos") {
+      downloadCSV(`recebidos_${today}`, [
+        { key: "paid", label: "Recebido em" }, { key: "by", label: "Baixa por" }, { key: "customer", label: "Cliente" },
+        { key: "seller", label: "Vendedor" }, { key: "sale", label: "Venda" }, { key: "method", label: "Forma" },
+        { key: "due", label: "Vencimento" }, { key: "amount", label: "Bruto" }, { key: "net", label: "Líquido" },
+        { key: "fee", label: "Taxa" }, { key: "anticipated", label: "Antecipado" }, { key: "att", label: "Anexos" },
+      ], paidRows.map((r) => ({
+        ...base(r), paid: fmtDateTime(r.paid_at), by: r.paid_by_name || "",
+        net: csvMoney(r.received_amount ?? r.amount), fee: csvMoney(r.fee_amount), anticipated: r.anticipated ? "sim" : "",
+      })));
+      return;
+    }
+    downloadCSV(`inadimplencia_${today}`, [
+      { key: "customer", label: "Cliente" }, { key: "phone", label: "Contato" }, { key: "sale", label: "Venda" },
+      { key: "due", label: "Vencimento" }, { key: "late", label: "Dias de atraso" }, { key: "method", label: "Forma" },
+      { key: "amount", label: "Valor" },
+    ], debtors.flatMap((d) => d.items.map((r) => ({
+      ...base(r), customer: d.name, phone: d.phone || "", late: r.due_date ? -daysUntil(r.due_date) : "",
+    }))));
+  }
+  const listLen = tab === "emitir" ? toIssueRows.length : tab === "aberto" ? openRows.length : tab === "recebidos" ? paidRows.length : debtors.length;
 
   function toggle(id: string) {
     setSelected((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -455,7 +691,7 @@ export default function Receber() {
 
   /* ---------- emissão em lote (carnê) ---------- */
   function openBatchIssue() {
-    const list = rows.filter((r) => issueSel.has(r.id)).sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""));
+    const list = toIssueRows.filter((r) => issueSel.has(r.id)).sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""));
     setBatchRows(list.map((r) => ({ row: r, due: r.due_date || addDaysISO(7), line: "" })));
     setBatchBank("");
     setBatchFile(null);
@@ -656,25 +892,70 @@ export default function Receber() {
             {METHOD_FILTERS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
           </select>
         )}
+        <MoreFiltersButton count={panelCount}>
+          <FilterField label="Cliente">
+            <FilterSelect value={extra.customer} onChange={(v) => setX({ customer: v })} options={customerOptions} />
+          </FilterField>
+          <FilterField label="Vendedor">
+            <FilterSelect value={extra.seller} onChange={(v) => setX({ seller: v })} options={sellerOptions} />
+          </FilterField>
+          <FilterField label="Vencimento">
+            <div className="grid grid-cols-2 gap-2">
+              <Input type="date" value={extra.dueFrom} onChange={(e) => setX({ dueFrom: e.target.value })} className="h-8 text-xs" aria-label="Vencimento de" />
+              <Input type="date" value={extra.dueTo} onChange={(e) => setX({ dueTo: e.target.value })} className="h-8 text-xs" aria-label="Vencimento até" />
+            </div>
+            <div className="flex gap-3 pt-0.5 text-xs">
+              <button type="button" className="text-primary hover:underline" onClick={() => { const r = monthRange(0); setX({ dueFrom: r.from, dueTo: r.to }); }}>Este mês</button>
+              <button type="button" className="text-primary hover:underline" onClick={() => { const r = monthRange(1); setX({ dueFrom: r.from, dueTo: r.to }); }}>Próximo mês</button>
+              {(extra.dueFrom || extra.dueTo) && <button type="button" className="text-muted-foreground hover:underline" onClick={() => setX({ dueFrom: "", dueTo: "" })}>Qualquer data</button>}
+            </div>
+          </FilterField>
+          <FilterField label="Valor (R$)">
+            <div className="grid grid-cols-2 gap-2">
+              <Input inputMode="decimal" value={extra.minV} onChange={(e) => setX({ minV: e.target.value })} placeholder="Mínimo" className="h-8 text-xs" aria-label="Valor mínimo" />
+              <Input inputMode="decimal" value={extra.maxV} onChange={(e) => setX({ maxV: e.target.value })} placeholder="Máximo" className="h-8 text-xs" aria-label="Valor máximo" />
+            </div>
+          </FilterField>
+          <div className="grid grid-cols-2 gap-2">
+            {methodApplies && (
+              <FilterField label="Boleto">
+                <FilterSelect value={extra.boleto} onChange={(v) => setX({ boleto: v })} options={BOLETO_OPTIONS} />
+              </FilterField>
+            )}
+            <FilterField label="Anexo">
+              <FilterSelect value={extra.attach} onChange={(v) => setX({ attach: v })} options={ATTACH_OPTIONS} />
+            </FilterField>
+          </div>
+        </MoreFiltersButton>
+        <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" onClick={exportCSV} disabled={loading || !!loadError || listLen === 0}>
+          <Download className="h-3.5 w-3.5" /> Exportar CSV
+        </Button>
         <div className="relative ml-auto w-full sm:w-64">
           <Search className="pointer-events-none absolute left-2.5 top-2 h-4 w-4 text-muted-foreground" />
           <Input id="recv-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cliente, nº da venda ou linha" className="h-8 pl-8 text-sm" />
         </div>
       </div>
 
-      {tab === "aberto" && selected.size > 0 && (
+      {(activeFilters.length > 0 || (!loading && !loadError)) && (
+        <div className="space-y-2">
+          <ActiveFilterChips filters={activeFilters} onClearAll={clearFilters} />
+          {!loading && !loadError && <FilterSummary items={summary} />}
+        </div>
+      )}
+
+      {tab === "aberto" && selectedRows.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-[10px] border border-primary/40 bg-accent/40 px-4 py-2.5 text-sm">
-          <span><strong>{selected.size}</strong> selecionado{selected.size > 1 ? "s" : ""} · <strong className="num">{formatBRL(selectedGross)}</strong></span>
-          <Button size="sm" className="ml-auto" onClick={() => openBaixa([...selected])}>
+          <span><strong>{selectedRows.length}</strong> selecionado{selectedRows.length > 1 ? "s" : ""} · <strong className="num">{formatBRL(selectedGross)}</strong></span>
+          <Button size="sm" className="ml-auto" onClick={() => openBaixa(selectedRows.map((r) => r.id))}>
             <CheckCircle2 className="mr-1.5 h-4 w-4" /> Dar baixa nos selecionados
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Limpar</Button>
         </div>
       )}
 
-      {tab === "emitir" && issueSel.size > 0 && (
+      {tab === "emitir" && issueSelRows.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-[10px] border border-primary/40 bg-accent/40 px-4 py-2.5 text-sm">
-          <span><strong>{issueSel.size}</strong> boleto{issueSel.size > 1 ? "s" : ""} · <strong className="num">{formatBRL(toIssueRows.filter((r) => issueSel.has(r.id)).reduce((s, r) => s + r.amount, 0))}</strong></span>
+          <span><strong>{issueSelRows.length}</strong> boleto{issueSelRows.length > 1 ? "s" : ""} · <strong className="num">{formatBRL(issueSelRows.reduce((s, r) => s + r.amount, 0))}</strong></span>
           <Button size="sm" className="ml-auto" onClick={openBatchIssue}>
             <FileText className="mr-1.5 h-4 w-4" /> Registrar emissão em lote
           </Button>
@@ -696,7 +977,7 @@ export default function Receber() {
           toIssueRows.length === 0 ? (
             <div className="px-6 py-14 text-center text-sm text-muted-foreground">
               <CheckCircle2 className="mx-auto mb-2 h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-              Nenhum boleto esperando emissão.
+              {activeFilters.length ? "Nenhum boleto a emitir com esses filtros." : "Nenhum boleto esperando emissão."}
             </div>
           ) : (
             <Table>
@@ -805,7 +1086,7 @@ export default function Receber() {
           )
         ) : tab === "recebidos" ? (
           paidRows.length === 0 ? (
-            <div className="px-6 py-14 text-center text-sm text-muted-foreground">Nenhuma baixa nesse período.</div>
+            <div className="px-6 py-14 text-center text-sm text-muted-foreground">{activeFilters.length ? "Nenhuma baixa com esses filtros." : "Nenhuma baixa nesse período."}</div>
           ) : (
             <Table>
               <TableHeader>
@@ -877,7 +1158,7 @@ export default function Receber() {
         ) : debtors.length === 0 ? (
           <div className="px-6 py-14 text-center text-sm text-muted-foreground">
             <CheckCircle2 className="mx-auto mb-2 h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-            Nenhum cliente com pagamento vencido.
+            {activeFilters.length ? "Nenhum cliente com pagamento vencido nesses filtros." : "Nenhum cliente com pagamento vencido."}
           </div>
         ) : (
           <Table>
