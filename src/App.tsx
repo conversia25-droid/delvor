@@ -47,6 +47,8 @@ const UpdatePassword = lazy(() => import("./pages/UpdatePassword"));
 const TermsOfUse = lazy(() => import("./pages/TermsOfUse"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const TrackOrder = lazy(() => import("./pages/TrackOrder"));
+const Entregador = lazy(() => import("./pages/Entregador"));
+const Expedicao = lazy(() => import("./pages/Expedicao"));
 const Help = lazy(() => import("./pages/Help"));
 const Support = lazy(() => import("./pages/Support"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -473,6 +475,8 @@ function AppContent() {
           <Route path="/termos" element={<TermsOfUse />} />
           <Route path="/privacidade" element={<PrivacyPolicy />} />
           <Route path="/acompanhar" element={<TrackOrder />} />
+          {/* Link do motoqueiro: sem login, por token */}
+          <Route path="/entregador" element={<Entregador />} />
           <Route path="/ajuda" element={<ProtectedRoute><ProtectedLayout><Help /></ProtectedLayout></ProtectedRoute>} />
           <Route path="/support" element={<ProtectedRoute><ProtectedLayout><Support /></ProtectedLayout></ProtectedRoute>} />
 
@@ -507,6 +511,7 @@ function AppContent() {
           <Route path="/services" element={<ProtectedRoute><ProtectedLayout><Services /></ProtectedLayout></ProtectedRoute>} />
           <Route path="/suppliers" element={<ProtectedRoute><ProtectedLayout><Suppliers /></ProtectedLayout></ProtectedRoute>} />
           <Route path="/sales" element={<ProtectedRoute><ProtectedLayout><Sales /></ProtectedLayout></ProtectedRoute>} />
+          <Route path="/expedicao" element={<ProtectedRoute><ProtectedLayout><Expedicao /></ProtectedLayout></ProtectedRoute>} />
           <Route path="/sales/new" element={<ProtectedRoute><ProtectedLayout><SaleEditor /></ProtectedLayout></ProtectedRoute>} />
           <Route path="/sales/:id" element={<ProtectedRoute><ProtectedLayout><SaleEditor /></ProtectedLayout></ProtectedRoute>} />
           <Route path="/orcamentos" element={<ProtectedRoute><ProtectedLayout><Orcamentos /></ProtectedLayout></ProtectedRoute>} />

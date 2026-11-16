@@ -21,6 +21,8 @@ import {
   UserCog,
   Lock,
   ChevronDown,
+  Truck,
+  PackageOpen,
 } from "lucide-react";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -98,6 +100,7 @@ import OsStatusTransitionDialog from "@/components/service-orders/OsStatusTransi
 import TransferOsDialog from "@/components/service-orders/TransferOsDialog";
 import { openWhatsApp, pickWhatsapp } from "@/lib/whatsapp";
 import { usePermissions } from "@/hooks/usePermissions";
+import { KIND_LABEL, STAGE_LABEL, type TaskKind, type TaskStage } from "@/lib/delivery";
 
 type ItemDraft = {
   id?: string;
@@ -273,6 +276,29 @@ export default function ServiceOrderEditor() {
     })();
     return () => { cancelled = true; };
   }, [id, isNew, navigate]);
+
+  // Tarefa de coleta/entrega aberta desta OS (expedição) — tolerante se a tabela não existir
+  const [deliveryTask, setDeliveryTask] = useState<{ kind: TaskKind; stage: TaskStage; courier: string | null } | null>(null);
+  useEffect(() => {
+    setDeliveryTask(null);
+    if (isNew || !id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("delivery_tasks" as any)
+          .select("kind, stage, couriers(name)")
+          .eq("service_order_id", id)
+          .in("stage", ["separar", "pronto", "atribuida", "em_rota"])
+          .order("created_at", { ascending: false })
+          .limit(1);
+        if (cancelled || error) return;
+        const t = ((data as any[]) || [])[0];
+        if (t) setDeliveryTask({ kind: t.kind, stage: t.stage, courier: t.couriers?.name ?? null });
+      } catch { /* expedição indisponível */ }
+    })();
+    return () => { cancelled = true; };
+  }, [id, isNew]);
 
   // Cliente atual (mostra no header)
   useEffect(() => {
@@ -788,6 +814,28 @@ export default function ServiceOrderEditor() {
             <Button variant="outline" onClick={() => setTransferOpen(true)} title="Transferir para outro técnico">
               <UserCog className="h-4 w-4 mr-1" /> Transferir
             </Button>
+          )}
+
+          {/* Expedição — mandar para coleta/entrega ou ver a etapa */}
+          {!isNew && os?.id && status !== "cancelada" && (
+            deliveryTask ? (
+              <Button variant="outline" asChild title="Ver na expedição" className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300 hover:bg-sky-500/20">
+                <Link to="/expedicao">
+                  {deliveryTask.kind === "coleta" ? <PackageOpen className="h-4 w-4 mr-1" /> : <Truck className="h-4 w-4 mr-1" />}
+                  {KIND_LABEL[deliveryTask.kind] ?? deliveryTask.kind}: {STAGE_LABEL[deliveryTask.stage] ?? deliveryTask.stage}
+                  {deliveryTask.courier ? ` · ${deliveryTask.courier}` : ""}
+                </Link>
+              </Button>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => navigate(`/expedicao?nova=os&id=${os.id}&tipo=coleta`)} title="Mandar buscar com o motoqueiro">
+                  <PackageOpen className="h-4 w-4 mr-1" /> Coleta
+                </Button>
+                <Button variant="outline" onClick={() => navigate(`/expedicao?nova=os&id=${os.id}&tipo=entrega`)} title="Mandar entregar com o motoqueiro">
+                  <Truck className="h-4 w-4 mr-1" /> Entrega
+                </Button>
+              </>
+            )
           )}
 
           {/* Converter em venda — só admin/gerente/vendedor que abriu */}

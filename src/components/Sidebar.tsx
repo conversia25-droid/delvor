@@ -75,6 +75,7 @@ const navigation = [
   { name: "Agenda",       href: "/schedule",       group: "Operação", icon: Calendar,     roles: ["admin", "gerente", "vendedor", "tecnico", "user"] },
   { name: "PDV / Vendas", href: "/pdv",            group: "Vendas", icon: Wallet,       roles: ["admin", "gerente", "vendedor", "user"] },
   { name: "Orçamentos",   href: "/orcamentos",     group: "Vendas", icon: FileText,     roles: ["admin", "gerente", "vendedor", "user"] },
+  { name: "Expedição",    href: "/expedicao",      group: "Vendas", icon: Truck,        roles: ["admin", "gerente", "vendedor", "user", "financeiro"] },
   { name: "Locações",     href: "/rentals",        group: "Vendas", icon: Repeat,       roles: ["admin", "gerente", "vendedor", "tecnico", "user"], verticals: ["assistencia_tecnica"] },
   { name: "Estoque",      href: "/products",       group: "Estoque", icon: Package,      roles: ["admin", "gerente", "tecnico"], verticals: ["assistencia_tecnica", "deposito_construcao"] },
   { name: "Catálogo",     href: "/services",       group: "Estoque", icon: Tags,         roles: ["admin", "gerente"], verticals: ["assistencia_tecnica"] },

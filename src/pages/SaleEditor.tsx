@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   RotateCcw,
   Printer,
+  Truck,
 } from "lucide-react";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -82,6 +83,7 @@ import { generateSalePdf } from "@/lib/salePdf";
 import { imageToDataUrl, loadCompanyHeader } from "@/lib/companyInfo";
 import { getOpenSession } from "@/lib/cashRegister";
 import { usePermissions } from "@/hooks/usePermissions";
+import { STAGE_LABEL, type TaskStage } from "@/lib/delivery";
 
 type ItemDraft = {
   /** id no banco (se já gravado) */
@@ -291,6 +293,29 @@ function SaleEditorInner() {
     })();
     return () => { cancelled = true; };
   }, [id, isNew, navigate]);
+
+  // Tarefa de entrega aberta desta venda (expedição) — tolerante se a tabela não existir
+  const [deliveryTask, setDeliveryTask] = useState<{ stage: TaskStage; courier: string | null } | null>(null);
+  useEffect(() => {
+    setDeliveryTask(null);
+    if (isNew || !id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("delivery_tasks" as any)
+          .select("stage, couriers(name)")
+          .eq("sale_id", id)
+          .in("stage", ["separar", "pronto", "atribuida", "em_rota"])
+          .order("created_at", { ascending: false })
+          .limit(1);
+        if (cancelled || error) return;
+        const t = ((data as any[]) || [])[0];
+        if (t) setDeliveryTask({ stage: t.stage, courier: t.couriers?.name ?? null });
+      } catch { /* expedição indisponível */ }
+    })();
+    return () => { cancelled = true; };
+  }, [id, isNew]);
 
   // Carrega o cliente atual (pra mostrar nome no header e usar no PDF/whatsapp)
   useEffect(() => {
@@ -800,6 +825,23 @@ function SaleEditorInner() {
             <Button variant="outline" onClick={() => setTransferOpen(true)} title="Transferir venda para outro vendedor">
               <UserCog className="h-4 w-4 mr-1" /> Transferir
             </Button>
+          )}
+
+          {/* Expedição — mandar para entrega ou ver a etapa */}
+          {!isNew && sale?.id && status !== "cancelado" && (
+            deliveryTask ? (
+              <Button variant="outline" asChild title="Ver na expedição" className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300 hover:bg-sky-500/20">
+                <Link to="/expedicao">
+                  <Truck className="h-4 w-4 mr-1" />
+                  {STAGE_LABEL[deliveryTask.stage] ?? deliveryTask.stage}
+                  {deliveryTask.courier ? ` · ${deliveryTask.courier}` : ""}
+                </Link>
+              </Button>
+            ) : (
+              <Button variant="outline" onClick={() => navigate(`/expedicao?nova=venda&id=${sale.id}`)} title="Mandar para a expedição">
+                <Truck className="h-4 w-4 mr-1" /> Entrega
+              </Button>
+            )
           )}
 
           {(editable || canEditPayments) && (
